@@ -1,0 +1,564 @@
+{% extends "automaton/base.html" %}
+
+{% block title %}{{ automaton.name }} - Details{% endblock %}
+
+{% block content %}
+<div class="containe    // URLs
+    const getJsonUrl = `{% url 'core:get_automaton_json' automaton.pk %}`;
+    const getSymbolsUrl = `{% url 'core:get_alphabet_symbols' automaton.pk %}`;
+    const addStateUrl = `{% url 'core:add_state' automaton.pk %}`;
+    const updateStateUrl = `{% url 'core:update_state' automaton.pk %}`;
+    const deleteStateUrl = `{% url 'core:delete_state' automaton.pk %}`;
+    const addTransitionUrl = `{% url 'core:add_transition' automaton.pk %}`;
+    const deleteTransitionUrl = `{% url 'core:delete_transition' automaton.pk %}`;
+    const simulateUrl = `{% url 'core:simulate_string' automaton.pk %}`;>
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="page-title mb-1">{{ automaton.name }}</h1>
+                    <div class="d-flex align-items-center gap-3">
+                        <span class="badge bg-primary">{{ automaton|class_name }}</span>
+                        <span class="text-muted">Alphabet: {{ automaton.alphabet }}</span>
+                    </div>
+                </div>
+                <div class="btn-group">
+                    <a href="{% url 'core:automaton_update' automaton.pk %}" class="btn btn-outline-primary">
+                        <i class="fas fa-edit me-1"></i>Edit
+                    </a>
+                    <a href="{% url 'core:automaton_delete' automaton.pk %}" class="btn btn-outline-danger">
+                        <i class="fas fa-trash me-1"></i>Delete
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Display -->
+    <div id="global-error" class="alert alert-danger d-none" role="alert"></div>
+
+    <!-- Main Content -->
+    <div class="row">
+        <!-- Left Column: Graph Visualization -->
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-project-diagram me-2"></i>Automaton Visualization
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <div id="cy" style="height: 600px; width: 100%;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Controls -->
+        <div class="col-lg-4">
+            <!-- Simulation Panel -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-play me-2"></i>Test String
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <form id="simulation-form">
+                        <div class="mb-3">
+                            <input type="text" id="input-string" class="form-control" placeholder="Enter string to test...">
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-play me-2"></i>Simulate
+                        </button>
+                    </form>
+                    <div id="simulation-result" class="mt-3 d-none"></div>
+                </div>
+            </div>
+
+            <!-- State Management Panel -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-circle me-2"></i>States
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <form id="add-state-form" class="mb-3">
+                        <div class="input-group">
+                            <input type="text" id="state-name" class="form-control" placeholder="State name">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                    </form>
+                    <div style="max-height: 200px; overflow-y: auto;">
+                        <div id="state-list"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Transition Management Panel -->
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-arrow-right me-2"></i>Transitions
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <form id="add-transition-form" class="mb-3">
+                        <div class="row g-2 mb-2">
+                            <div class="col-4">
+                                <select id="from-state" class="form-select form-select-sm">
+                                    <option value="">From</option>
+                                </select>
+                            </div>
+                            <div class="col-4">
+                                <select id="transition-symbol" class="form-select form-select-sm">
+                                    <option value="">Symbol</option>
+                                </select>
+                            </div>
+                            <div class="col-4">
+                                <select id="to-state" class="form-select form-select-sm">
+                                    <option value="">To</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="multiple-symbols-container" class="mb-2" style="display: none;">
+                            <div class="form-text mb-2">Select multiple symbols for this transition:</div>
+                            <div id="multiple-symbols-checkboxes" class="row"></div>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-sm w-100">
+                            <i class="fas fa-plus me-1"></i>Add Transition
+                        </button>
+                    </form>
+                    <div style="max-height: 200px; overflow-y: auto;">
+                        <div id="transition-list"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const automatonId = '{{ automaton.pk }}';
+    const csrftoken = '{{ csrf_token }}';
+
+    // URLs
+    const getJsonUrl = `{% url 'core:get_automaton_json' automaton.pk %}`;
+    const getSymbolsUrl = `{% url 'core:get_alphabet_symbols' automaton.pk %}`;
+    const addStateUrl = `{% url 'core:add_state' automaton.pk %}`;
+    const updateStateUrl = `{% url 'core:update_state' automaton.pk %}`;
+    const deleteStateUrl = `{% url 'core:delete_state' automaton.pk %}`;
+    const addTransitionUrl = `{% url 'core:add_transition' automaton.pk %}`;
+    const deleteTransitionUrl = `{% url 'core:delete_transition' automaton.pk %}`;
+    const simulateUrl = `{% url 'core:simulate_string' automaton.pk %}`;
+
+    // DOM Elements
+    const globalErrorDiv = document.getElementById('global-error');
+
+    // --- Cytoscape Initialization ---
+    let cy = cytoscape({
+        container: document.getElementById('cy'),
+        style: [
+            {
+                selector: 'node',
+                style: {
+                    'background-color': '#ffffff',
+                    'border-width': 2,
+                    'border-color': '#1e3a8a',
+                    'label': 'data(name)',
+                    'color': '#1f2937',
+                    'text-valign': 'center',
+                    'text-halign': 'center',
+                    'font-size': '14px',
+                    'font-weight': '600',
+                    'width': 40,
+                    'height': 40,
+                    'shape': 'ellipse'
+                }
+            },
+            {
+                selector: 'edge',
+                style: {
+                    'width': 2,
+                    'line-color': '#1e3a8a',
+                    'target-arrow-color': '#1e3a8a',
+                    'target-arrow-shape': 'triangle',
+                    'curve-style': 'bezier',
+                    'label': 'data(label)',
+                    'color': '#1f2937',
+                    'font-size': '12px',
+                    'font-weight': '600',
+                    'text-background-opacity': 1,
+                    'text-background-color': '#ffffff',
+                    'text-background-padding': '3px',
+                    'text-border-width': 1,
+                    'text-border-color': '#e2e8f0',
+                    'source-distance-from-node': 5,
+                    'target-distance-from-node': 5
+                }
+            },
+            {
+                selector: 'node[?is_start]',
+                style: {
+                    'border-width': 4,
+                    'border-color': '#059669'
+                }
+            },
+            {
+                selector: 'node[?is_final]',
+                style: {
+                    'border-width': 4,
+                    'border-color': '#dc2626',
+                    'border-style': 'double'
+                }
+            },
+            {
+                selector: 'node[?is_start][?is_final]',
+                style: {
+                    'border-width': 4,
+                    'border-color': '#7c3aed',
+                    'border-style': 'double'
+                }
+            },
+            {
+                selector: '.highlighted',
+                style: {
+                    'background-color': '#3b82f6',
+                    'border-color': '#1d4ed8',
+                    'color': '#ffffff',
+                    'transition-property': 'background-color, border-color, color',
+                    'transition-duration': '0.3s'
+                }
+            },
+            {
+                selector: '.path-edge',
+                style: {
+                    'line-color': '#3b82f6',
+                    'target-arrow-color': '#3b82f6',
+                    'width': 3
+                }
+            }
+        ],
+        layout: {
+            name: 'circle',
+            radius: 150,
+            padding: 50,
+            animate: true,
+            animationDuration: 500
+        }
+    });
+
+    // --- Helper Functions ---
+    function displayError(message) {
+        globalErrorDiv.textContent = message;
+        globalErrorDiv.classList.remove('d-none');
+        setTimeout(() => globalErrorDiv.classList.add('d-none'), 5000);
+    }
+
+    async function apiPost(url, body) {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+            body: JSON.stringify(body)
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'An unknown error occurred.');
+        }
+        return response.json();
+    }
+
+    // --- Core Data Refresh Function ---
+    async function refreshAutomatonData() {
+        try {
+            const response = await fetch(getJsonUrl);
+            const data = await response.json();
+            
+            cy.elements().remove();
+            cy.add(data);
+            cy.layout({ name: 'circle', radius: 150, padding: 50, animate: true }).run();
+
+            updateControlLists(data);
+            loadSymbols(); // Load symbols for dropdown
+        } catch (error) {
+            displayError('Failed to load automaton data.');
+        }
+    }
+
+    // --- UI Update Functions ---
+    function updateControlLists(data) {
+        const stateList = document.getElementById('state-list');
+        const transitionList = document.getElementById('transition-list');
+        const fromStateSelect = document.getElementById('from-state');
+        const toStateSelect = document.getElementById('to-state');
+        
+        stateList.innerHTML = '';
+        transitionList.innerHTML = '';
+        fromStateSelect.innerHTML = '<option value="">From</option>';
+        toStateSelect.innerHTML = '<option value="">To</option>';
+
+        data.nodes.sort((a,b) => a.data.name.localeCompare(b.data.name)).forEach(node => {
+            const stateId = node.data.id;
+            const statePk = node.data.pk;
+            const stateName = node.data.name;
+
+            // Create state item
+            const stateItem = document.createElement('div');
+            stateItem.className = 'state-item d-flex justify-content-between align-items-center';
+            
+            const stateInfo = document.createElement('div');
+            stateInfo.innerHTML = `
+                <span class="fw-bold">${stateName}</span>
+                <div class="small text-muted">
+                    ${node.data.is_start ? '<span class="badge bg-success badge-sm">Start</span>' : ''}
+                    ${node.data.is_final ? '<span class="badge bg-danger badge-sm">Final</span>' : ''}
+                </div>
+            `;
+            
+            const stateControls = document.createElement('div');
+            stateControls.className = 'd-flex gap-1';
+            stateControls.innerHTML = `
+                <button class="btn btn-outline-success btn-icon btn-sm" data-action="set_start" data-state-pk="${statePk}" title="Set as Start">
+                    <i class="fas fa-play"></i>
+                </button>
+                <button class="btn btn-outline-warning btn-icon btn-sm" data-action="toggle_final" data-state-pk="${statePk}" title="Toggle Final">
+                    <i class="fas fa-flag"></i>
+                </button>
+                <button class="btn btn-outline-danger btn-icon btn-sm" data-action="delete" data-state-pk="${statePk}" title="Delete">
+                    <i class="fas fa-trash"></i>
+                </button>
+            `;
+            
+            stateItem.appendChild(stateInfo);
+            stateItem.appendChild(stateControls);
+            stateList.appendChild(stateItem);
+
+            // Populate select dropdowns
+            const option = `<option value="${statePk}">${stateName}</option>`;
+            fromStateSelect.innerHTML += option;
+            toStateSelect.innerHTML += option;
+        });
+
+        data.edges.forEach(edge => {
+            const transPk = edge.data.pk;
+            const transItem = document.createElement('div');
+            transItem.className = 'transition-item d-flex justify-content-between align-items-center';
+            
+            const transInfo = document.createElement('div');
+            transInfo.innerHTML = `
+                <span class="font-monospace small">${edge.data.source} →<sub>${edge.data.label}</sub> ${edge.data.target}</span>
+            `;
+            
+            const transControls = document.createElement('div');
+            transControls.innerHTML = `
+                <button class="btn btn-outline-danger btn-icon btn-sm" data-action="delete" data-trans-pk="${transPk}" title="Delete">
+                    <i class="fas fa-trash"></i>
+                </button>
+            `;
+            
+            transItem.appendChild(transInfo);
+            transItem.appendChild(transControls);
+            transitionList.appendChild(transItem);
+        });
+    }
+
+    // --- Symbol Loading ---
+    function loadSymbols() {
+        fetch(getSymbolsUrl)
+            .then(response => response.json())
+            .then(data => {
+                const symbolSelect = document.getElementById('transition-symbol');
+                symbolSelect.innerHTML = '<option value="">Symbol</option>';
+                
+                data.symbols.forEach(symbol => {
+                    const option = document.createElement('option');
+                    option.value = symbol.value;
+                    option.textContent = symbol.label;
+                    symbolSelect.appendChild(option);
+                });
+            })
+            .catch(error => {
+                console.error('Error loading symbols:', error);
+                showError('Failed to load symbols');
+            });
+    }
+
+    // Handle multiple symbol selection
+    document.getElementById('transition-symbol').addEventListener('change', function() {
+        const multipleContainer = document.getElementById('multiple-symbols-container');
+        const checkboxContainer = document.getElementById('multiple-symbols-checkboxes');
+        
+        if (this.value === 'multiple') {
+            // Load alphabet symbols as checkboxes
+            fetch(getSymbolsUrl)
+                .then(response => response.json())
+                .then(data => {
+                    checkboxContainer.innerHTML = '';
+                    data.symbols.forEach(symbol => {
+                        if (symbol.value !== 'ε') { // Don't include epsilon in multiple selection
+                            const colDiv = document.createElement('div');
+                            colDiv.className = 'col-6 col-md-4 col-lg-3';
+                            colDiv.innerHTML = `
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" value="${symbol.value}" id="symbol-${symbol.value}">
+                                    <label class="form-check-label" for="symbol-${symbol.value}">
+                                        ${symbol.label}
+                                    </label>
+                                </div>
+                            `;
+                            checkboxContainer.appendChild(colDiv);
+                        }
+                    });
+                    multipleContainer.style.display = 'block';
+                });
+        } else {
+            multipleContainer.style.display = 'none';
+        }
+    });
+
+    // --- Event Handlers ---
+    document.getElementById('add-state-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const stateNameInput = document.getElementById('state-name');
+        const name = stateNameInput.value.trim();
+        if (!name) return;
+        try {
+            await apiPost(addStateUrl, { name });
+            stateNameInput.value = '';
+            refreshAutomatonData();
+        } catch (error) {
+            displayError(error.message);
+        }
+    });
+
+    document.getElementById('add-transition-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const fromState = document.getElementById('from-state').value;
+        const toState = document.getElementById('to-state').value;
+        let symbol = document.getElementById('transition-symbol').value;
+        
+        if (!fromState || !toState || !symbol) {
+            displayError("Please select from/to states and enter a symbol.");
+            return;
+        }
+        
+        // Handle multiple symbol selection
+        if (symbol === 'multiple') {
+            const checkedBoxes = document.querySelectorAll('#multiple-symbols-checkboxes input[type="checkbox"]:checked');
+            if (checkedBoxes.length === 0) {
+                displayError("Please select at least one symbol for multiple symbol transition.");
+                return;
+            }
+            const selectedSymbols = Array.from(checkedBoxes).map(cb => cb.value);
+            symbol = selectedSymbols.join(',');
+        }
+        
+        try {
+            await apiPost(addTransitionUrl, { from_state: fromState, to_state: toState, symbol });
+            document.getElementById('transition-symbol').value = '';
+            document.getElementById('multiple-symbols-container').style.display = 'none';
+            // Uncheck all checkboxes
+            document.querySelectorAll('#multiple-symbols-checkboxes input[type="checkbox"]').forEach(cb => cb.checked = false);
+            refreshAutomatonData();
+        } catch (error) {
+            displayError(error.message);
+        }
+    });
+
+    document.getElementById('simulation-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const inputString = document.getElementById('input-string').value;
+        const resultDiv = document.getElementById('simulation-result');
+        
+        try {
+            const response = await fetch(`${simulateUrl}?input_string=${encodeURIComponent(inputString)}`);
+            const result = await response.json();
+
+            resultDiv.classList.remove('d-none');
+            cy.elements().removeClass('highlighted path-edge');
+            
+            if (result.path && result.path.length > 0) {
+                // Animate path
+                let i = 0;
+                const highlightNext = () => {
+                    if (i < result.path.length) {
+                        cy.getElementById(result.path[i]).addClass('highlighted');
+                        if (i > 0) {
+                            // Highlight the edge between previous and current state
+                            const prevState = result.path[i-1];
+                            const currState = result.path[i];
+                            cy.edges(`[source="${prevState}"][target="${currState}"]`).addClass('path-edge');
+                        }
+                        i++;
+                        setTimeout(highlightNext, 800);
+                    }
+                };
+                highlightNext();
+            }
+
+            if (result.accepted) {
+                resultDiv.className = 'mt-3 alert alert-success';
+                resultDiv.innerHTML = `
+                    <i class="fas fa-check-circle me-2"></i>
+                    <strong>Accepted!</strong><br>
+                    <small>Path: ${result.path.join(' → ')}</small>
+                `;
+            } else {
+                resultDiv.className = 'mt-3 alert alert-danger';
+                resultDiv.innerHTML = `
+                    <i class="fas fa-times-circle me-2"></i>
+                    <strong>Rejected</strong><br>
+                    <small>${result.message}</small>
+                `;
+            }
+        } catch (error) {
+            displayError('Simulation failed.');
+        }
+    });
+
+    // Event delegation for state and transition controls
+    document.addEventListener('click', async (e) => {
+        const target = e.target.closest('button[data-action]');
+        if (!target) return;
+
+        const statePk = target.dataset.statePk;
+        const transPk = target.dataset.transPk;
+
+        if (statePk) {
+            const action = target.dataset.action;
+            try {
+                if (action === 'delete') {
+                    if (confirm('Delete this state and all its transitions?')) {
+                        await apiPost(deleteStateUrl, { state_pk: statePk });
+                    } else { return; }
+                } else {
+                    await apiPost(updateStateUrl, { state_pk: statePk, action: action });
+                }
+                refreshAutomatonData();
+            } catch (error) {
+                displayError(error.message);
+            }
+        }
+
+        if (transPk) {
+            if (confirm('Delete this transition?')) {
+                try {
+                    await apiPost(deleteTransitionUrl, { transition_pk: transPk });
+                    refreshAutomatonData();
+                } catch (error) {
+                    displayError(error.message);
+                }
+            }
+        }
+    });
+
+    // --- Initial Load ---
+    refreshAutomatonData();
+    loadSymbols();
+});
+</script>
+{% endblock %}

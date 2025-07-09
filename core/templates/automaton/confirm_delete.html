@@ -1,0 +1,55 @@
+{% extends "automaton/base.html" %}
+
+{% block title %}Delete {{ automaton.name }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white text-center">
+                <i class="fas fa-exclamation-triangle fa-3x mb-3"></i>
+                <h3 class="card-title mb-0">Delete Automaton</h3>
+                <p class="mb-0 opacity-75">This action cannot be undone</p>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-danger">
+                    <h6 class="alert-heading">Are you sure you want to delete this automaton?</h6>
+                    <hr>
+                    <div class="row">
+                        <div class="col-sm-4"><strong>Name:</strong></div>
+                        <div class="col-sm-8">{{ automaton.name }}</div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-4"><strong>Type:</strong></div>
+                        <div class="col-sm-8">{{ automaton|class_name }}</div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-4"><strong>Alphabet:</strong></div>
+                        <div class="col-sm-8">{{ automaton.alphabet }}</div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-4"><strong>States:</strong></div>
+                        <div class="col-sm-8">{{ automaton.states.count }}</div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-4"><strong>Transitions:</strong></div>
+                        <div class="col-sm-8">{{ automaton.transitions.count }}</div>
+                    </div>
+                </div>
+
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-danger">
+                            <i class="fas fa-trash me-2"></i>Yes, Delete Forever
+                        </button>
+                        <a href="{% url 'core:automaton_detail' pk=automaton.pk %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left me-2"></i>Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

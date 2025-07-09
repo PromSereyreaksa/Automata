@@ -1,0 +1,69 @@
+{% extends "automaton/base.html" %}
+
+{% block title %}Create New NFA{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header text-center">
+                <i class="fas fa-network-wired fa-3x text-primary mb-3"></i>
+                <h3 class="card-title mb-0">Create New NFA</h3>
+                <p class="text-muted mb-0">Non-deterministic Finite Automaton</p>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.name.id_for_label }}" class="form-label">
+                            Automaton Name
+                        </label>
+                        {{ form.name }}
+                        {% if form.name.errors %}
+                            <div class="text-danger small mt-1">
+                                {{ form.name.errors.0 }}
+                            </div>
+                        {% endif %}
+                        <div class="form-text">Give your NFA a descriptive name</div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="{{ form.alphabet.id_for_label }}" class="form-label">
+                            Alphabet
+                        </label>
+                        {{ form.alphabet }}
+                        {% if form.alphabet.errors %}
+                            <div class="text-danger small mt-1">
+                                {{ form.alphabet.errors.0 }}
+                            </div>
+                        {% endif %}
+                        <div class="form-text">{{ form.alphabet.help_text }}</div>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-plus me-2"></i>Create NFA
+                        </button>
+                        <a href="{% url 'core:dashboard' %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left me-2"></i>Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-body">
+                <h6 class="card-title">
+                    <i class="fas fa-info-circle me-2"></i>What's an NFA?
+                </h6>
+                <p class="card-text small text-muted">
+                    A Non-deterministic Finite Automaton (NFA) is a finite state machine where for each state and input symbol, 
+                    there can be zero, one, or multiple transitions. NFAs can also have epsilon (ε) transitions.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

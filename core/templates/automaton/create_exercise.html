@@ -1,0 +1,172 @@
+{% extends 'base.html' %}
+
+{% block title %}Create Exercise - Finite Automata Manager{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0">
+                    <i class="fas fa-plus"></i> Create New Exercise
+                </h4>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.title.id_for_label }}" class="form-label">Title</label>
+                        {{ form.title }}
+                        {% if form.title.errors %}
+                            <div class="text-danger">
+                                {% for error in form.title.errors %}
+                                    <small>{{ error }}</small>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.description.id_for_label }}" class="form-label">Description</label>
+                        {{ form.description }}
+                        {% if form.description.errors %}
+                            <div class="text-danger">
+                                {% for error in form.description.errors %}
+                                    <small>{{ error }}</small>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.exercise_type.id_for_label }}" class="form-label">Exercise Type</label>
+                        {{ form.exercise_type }}
+                        {% if form.exercise_type.errors %}
+                            <div class="text-danger">
+                                {% for error in form.exercise_type.errors %}
+                                    <small>{{ error }}</small>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.language_description.id_for_label }}" class="form-label">Language Description</label>
+                        {{ form.language_description }}
+                        <div class="form-text">Formal description of the language to be recognized</div>
+                        {% if form.language_description.errors %}
+                            <div class="text-danger">
+                                {% for error in form.language_description.errors %}
+                                    <small>{{ error }}</small>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.alphabet_input.id_for_label }}" class="form-label">Alphabet</label>
+                        {{ form.alphabet_input }}
+                        <div class="form-text">{{ form.alphabet_input.help_text }}</div>
+                        {% if form.alphabet_input.errors %}
+                            <div class="text-danger">
+                                {% for error in form.alphabet_input.errors %}
+                                    <small>{{ error }}</small>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.test_strings_input.id_for_label }}" class="form-label">Test Strings</label>
+                        {{ form.test_strings_input }}
+                        <div class="form-text">{{ form.test_strings_input.help_text }}</div>
+                        {% if form.test_strings_input.errors %}
+                            <div class="text-danger">
+                                {% for error in form.test_strings_input.errors %}
+                                    <small>{{ error }}</small>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            {{ form.is_public }}
+                            <label class="form-check-label" for="{{ form.is_public.id_for_label }}">
+                                Make this exercise public
+                            </label>
+                        </div>
+                        {% if form.is_public.errors %}
+                            <div class="text-danger">
+                                {% for error in form.is_public.errors %}
+                                    <small>{{ error }}</small>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{% url 'core:exercises_list' %}" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Create Exercise
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-info-circle"></i> Exercise Guidelines
+                </h5>
+            </div>
+            <div class="card-body">
+                <h6>Exercise Types:</h6>
+                <ul class="list-unstyled">
+                    <li class="mb-2">
+                        <span class="badge badge-primary">DFA</span> - Build a deterministic finite automaton
+                    </li>
+                    <li class="mb-2">
+                        <span class="badge badge-success">NFA</span> - Build a nondeterministic finite automaton
+                    </li>
+                    <li class="mb-2">
+                        <span class="badge badge-info">CONVERSION</span> - Convert NFA to DFA
+                    </li>
+                    <li class="mb-2">
+                        <span class="badge badge-warning">MINIMIZATION</span> - Minimize a DFA
+                    </li>
+                    <li class="mb-2">
+                        <span class="badge badge-secondary">ANALYSIS</span> - Analyze automaton properties
+                    </li>
+                </ul>
+                
+                <hr>
+                
+                <h6>Test String Format:</h6>
+                <p class="small">
+                    Enter test strings with expected results, one per line:
+                </p>
+                <pre class="small">abc:true
+ab:false
+epsilon:true</pre>
+                
+                <hr>
+                
+                <h6>Tips:</h6>
+                <ul class="small">
+                    <li>Provide clear language descriptions</li>
+                    <li>Include diverse test cases</li>
+                    <li>Test edge cases like empty string</li>
+                    <li>Make exercises progressively challenging</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

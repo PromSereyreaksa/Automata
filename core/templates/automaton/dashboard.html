@@ -1,0 +1,149 @@
+{% extends 'automaton/base.html' %}
+
+{% block title %}Dashboard - Finite Automata Visualizer{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="page-title">
+            <i class="fas fa-tachometer-alt me-3"></i>
+            Dashboard
+        </h1>
+        <p class="text-muted mb-4">Manage and visualize your finite automata</p>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-body text-center py-5">
+                <i class="fas fa-plus-circle fa-3x text-primary mb-3"></i>
+                <h5 class="card-title">Create New DFA</h5>
+                <p class="card-text text-muted">Build a Deterministic Finite Automaton</p>
+                <a href="{% url 'core:create_dfa' %}" class="btn btn-primary">
+                    <i class="fas fa-plus me-2"></i>Create DFA
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-body text-center py-5">
+                <i class="fas fa-plus-circle fa-3x text-primary mb-3"></i>
+                <h5 class="card-title">Create New NFA</h5>
+                <p class="card-text text-muted">Build a Nondeterministic Finite Automaton</p>
+                <a href="{% url 'core:create_nfa' %}" class="btn btn-primary">
+                    <i class="fas fa-plus me-2"></i>Create NFA
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-cogs me-2"></i>
+                    Your DFAs
+                    <span class="badge bg-primary ms-2">{{ automatons.dfas|length }}</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if automatons.dfas %}
+                    <div class="list-group list-group-flush">
+                        {% for dfa in automatons.dfas %}
+                            <div class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-1">{{ dfa.name }}</h6>
+                                    <small class="text-muted">{{ dfa.alphabet }}</small>
+                                </div>
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{% url 'core:automaton_detail' dfa.pk %}" class="btn btn-outline-primary">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <a href="{% url 'core:automaton_update' dfa.pk %}" class="btn btn-outline-secondary">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <a href="{% url 'core:automaton_delete' dfa.pk %}" class="btn btn-outline-danger">
+                                        <i class="fas fa-trash"></i>
+                                    </a>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">No DFAs created yet</p>
+                        <a href="{% url 'core:create_dfa' %}" class="btn btn-primary">Create your first DFA</a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-network-wired me-2"></i>
+                    Your NFAs
+                    <span class="badge bg-primary ms-2">{{ automatons.nfas|length }}</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if automatons.nfas %}
+                    <div class="list-group list-group-flush">
+                        {% for nfa in automatons.nfas %}
+                            <div class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-1">{{ nfa.name }}</h6>
+                                    <small class="text-muted">{{ nfa.alphabet }}</small>
+                                </div>
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{% url 'core:automaton_detail' nfa.pk %}" class="btn btn-outline-primary">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <a href="{% url 'core:automaton_update' nfa.pk %}" class="btn btn-outline-secondary">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <a href="{% url 'core:automaton_delete' nfa.pk %}" class="btn btn-outline-danger">
+                                        <i class="fas fa-trash"></i>
+                                    </a>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">No NFAs created yet</p>
+                        <a href="{% url 'core:create_nfa' %}" class="btn btn-primary">Create your first NFA</a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body text-center py-4">
+                <h5 class="card-title">
+                    <i class="fas fa-graduation-cap me-2"></i>
+                    Need Help Getting Started?
+                </h5>
+                <p class="card-text text-muted">
+                    Check out our collection of example automata to learn and practice
+                </p>
+                <a href="{% url 'core:exercises_list' %}" class="btn btn-outline-primary">
+                    <i class="fas fa-book me-2"></i>Browse Examples
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

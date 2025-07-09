@@ -1,0 +1,150 @@
+{% extends 'base.html' %}
+
+{% block title %}Analysis Result - {{ automaton.name }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>
+                <i class="fas fa-search"></i> Analysis Result
+                <small class="text-muted">{{ automaton.name }}</small>
+            </h1>
+            <a href="{% if automaton.automaton_type == 'DFA' %}{% url 'core:dfa_detail' automaton.pk %}{% else %}{% url 'core:nfa_detail' automaton.pk %}{% endif %}" class="btn btn-primary">
+                <i class="fas fa-arrow-left"></i> Back to Automaton
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-chart-line"></i> Analysis Results
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card border-{% if is_deterministic %}primary{% else %}success{% endif %}">
+                            <div class="card-body text-center">
+                                <h3 class="text-{% if is_deterministic %}primary{% else %}success{% endif %}">
+                                    {% if is_deterministic %}
+                                        <i class="fas fa-check-circle"></i> DFA
+                                    {% else %}
+                                        <i class="fas fa-project-diagram"></i> NFA
+                                    {% endif %}
+                                </h3>
+                                <p class="mb-0">
+                                    {% if is_deterministic %}
+                                        Deterministic Finite Automaton
+                                    {% else %}
+                                        Nondeterministic Finite Automaton
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="card border-info">
+                            <div class="card-body">
+                                <h6>Properties:</h6>
+                                <ul class="list-unstyled">
+                                    <li>
+                                        <i class="fas fa-circle"></i> 
+                                        <strong>{{ states_count }}</strong> states
+                                    </li>
+                                    <li>
+                                        <i class="fas fa-font"></i> 
+                                        <strong>{{ alphabet_size }}</strong> alphabet symbols
+                                    </li>
+                                    <li>
+                                        <i class="fas fa-arrows-alt"></i> 
+                                        <strong>{{ transitions_count }}</strong> transitions
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <hr>
+                
+                <div class="alert alert-{% if is_deterministic %}primary{% else %}success{% endif %}">
+                    <h6>
+                        <i class="fas fa-info-circle"></i> 
+                        Analysis: This automaton is {% if is_deterministic %}deterministic{% else %}nondeterministic{% endif %}
+                    </h6>
+                    <p class="mb-0">
+                        {% if is_deterministic %}
+                            Each state has at most one transition for each input symbol. 
+                            This makes the automaton deterministic and easier to simulate.
+                        {% else %}
+                            Some states have multiple transitions for the same input symbol, 
+                            or there may be epsilon transitions. This makes the automaton nondeterministic.
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-lightbulb"></i> Understanding the Analysis
+                </h5>
+            </div>
+            <div class="card-body">
+                <h6>Deterministic vs Nondeterministic:</h6>
+                
+                <div class="mb-3">
+                    <strong>DFA (Deterministic):</strong>
+                    <ul class="small">
+                        <li>Exactly one transition per state per symbol</li>
+                        <li>No epsilon (empty) transitions</li>
+                        <li>Easier to simulate and implement</li>
+                        <li>Unique computation path for each input</li>
+                    </ul>
+                </div>
+                
+                <div class="mb-3">
+                    <strong>NFA (Nondeterministic):</strong>
+                    <ul class="small">
+                        <li>Multiple transitions per state per symbol allowed</li>
+                        <li>May have epsilon transitions</li>
+                        <li>More expressive and compact</li>
+                        <li>Multiple computation paths possible</li>
+                    </ul>
+                </div>
+                
+                <div class="alert alert-info small">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>Note:</strong> NFAs and DFAs are equivalent in computational power - 
+                    any language recognized by an NFA can also be recognized by a DFA.
+                </div>
+            </div>
+        </div>
+        
+        {% if not is_deterministic and automaton.automaton_type == 'NFA' %}
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-exchange-alt"></i> Conversion Options
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="small">Since this is an NFA, you can convert it to an equivalent DFA.</p>
+                    <a href="{% url 'core:convert_nfa_to_dfa' automaton.pk %}" class="btn btn-primary btn-sm">
+                        <i class="fas fa-exchange-alt"></i> Convert to DFA
+                    </a>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

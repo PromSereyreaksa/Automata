@@ -1,0 +1,143 @@
+{% extends 'automaton/base.html' %}
+
+{% block title %}Examples - Finite Automata Visualizer{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="page-title">
+            <i class="fas fa-book me-3"></i>
+            Example Automata
+        </h1>
+        <p class="text-muted mb-4">
+            Explore these pre-built automata to understand different patterns and concepts
+        </p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-cogs me-2"></i>
+                    Example DFAs
+                    <span class="badge bg-primary ms-2">{{ dfas|length }}</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if dfas %}
+                    <div class="list-group list-group-flush">
+                        {% for dfa in dfas %}
+                            <div class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1">{{ dfa.name }}</h6>
+                                        <p class="mb-1 small text-muted">Alphabet: {{ dfa.alphabet }}</p>
+                                        <small class="text-primary">
+                                            {% if "even" in dfa.name|lower %}
+                                                Accepts strings with even number of specific symbols
+                                            {% elif "end" in dfa.name|lower %}
+                                                Accepts strings ending with specific pattern
+                                            {% elif "contain" in dfa.name|lower %}
+                                                Accepts strings containing specific substring
+                                            {% else %}
+                                                Educational example automaton
+                                            {% endif %}
+                                        </small>
+                                    </div>
+                                    <a href="{% url 'core:dfa_detail' dfa.pk %}" class="btn btn-primary btn-sm">
+                                        <i class="fas fa-eye me-1"></i>View
+                                    </a>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-info-circle fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">No example DFAs available</p>
+                        <small class="text-muted">Run the population script to add examples</small>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-network-wired me-2"></i>
+                    Example NFAs
+                    <span class="badge bg-primary ms-2">{{ nfas|length }}</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if nfas %}
+                    <div class="list-group list-group-flush">
+                        {% for nfa in nfas %}
+                            <div class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1">{{ nfa.name }}</h6>
+                                        <p class="mb-1 small text-muted">Alphabet: {{ nfa.alphabet }}</p>
+                                        <small class="text-primary">
+                                            {% if "or" in nfa.name|lower %}
+                                                Demonstrates nondeterministic choice
+                                            {% elif "epsilon" in nfa.name|lower %}
+                                                Uses epsilon transitions
+                                            {% else %}
+                                                Educational example automaton
+                                            {% endif %}
+                                        </small>
+                                    </div>
+                                    <a href="{% url 'core:nfa_detail' nfa.pk %}" class="btn btn-primary btn-sm">
+                                        <i class="fas fa-eye me-1"></i>View
+                                    </a>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-info-circle fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">No example NFAs available</p>
+                        <small class="text-muted">Run the population script to add examples</small>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="fas fa-lightbulb me-2"></i>
+                    How to Use Examples
+                </h5>
+                <div class="row text-center">
+                    <div class="col-md-4">
+                        <i class="fas fa-mouse-pointer fa-2x text-primary mb-2"></i>
+                        <h6>Click to View</h6>
+                        <small class="text-muted">Click on any example to see its visualization</small>
+                    </div>
+                    <div class="col-md-4">
+                        <i class="fas fa-keyboard fa-2x text-primary mb-2"></i>
+                        <h6>Test Strings</h6>
+                        <small class="text-muted">Enter strings to see if they're accepted</small>
+                    </div>
+                    <div class="col-md-4">
+                        <i class="fas fa-route fa-2x text-primary mb-2"></i>
+                        <h6>Watch Execution</h6>
+                        <small class="text-muted">See the path through states in real-time</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

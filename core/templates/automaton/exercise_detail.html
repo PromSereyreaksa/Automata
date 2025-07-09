@@ -1,0 +1,196 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ exercise.title }} - Exercise Detail{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>
+                <i class="fas fa-tasks"></i> {{ exercise.title }}
+                <span class="badge badge-{{ exercise.exercise_type|lower }}">{{ exercise.get_exercise_type_display }}</span>
+            </h1>
+            <div class="btn-group">
+                <a href="{% url 'core:exercises_list' %}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to Exercises
+                </a>
+                {% if not user_solution %}
+                    <a href="{% url 'core:start_exercise' exercise.pk %}" class="btn btn-primary">
+                        <i class="fas fa-play"></i> Start Exercise
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-info-circle"></i> Exercise Description
+                </h5>
+            </div>
+            <div class="card-body">
+                <p>{{ exercise.description|linebreaks }}</p>
+                
+                <h6>Language Description:</h6>
+                <div class="alert alert-info">
+                    {{ exercise.language_description|linebreaks }}
+                </div>
+                
+                <h6>Alphabet:</h6>
+                <p>
+                    {% for symbol in exercise.alphabet %}
+                        <code class="mr-1">{{ symbol }}</code>
+                    {% endfor %}
+                </p>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-vial"></i> Test Cases
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if exercise.test_strings %}
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Test String</th>
+                                    <th>Expected Result</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for test_case in exercise.test_strings %}
+                                    <tr>
+                                        <td><code>{{ test_case.string }}</code></td>
+                                        <td>
+                                            {% if test_case.expected %}
+                                                <span class="badge badge-success">Accept</span>
+                                            {% else %}
+                                                <span class="badge badge-danger">Reject</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted">No test cases defined for this exercise.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-chart-bar"></i> Exercise Info
+                </h5>
+            </div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-5">Type:</dt>
+                    <dd class="col-sm-7">
+                        <span class="badge badge-{{ exercise.exercise_type|lower }}">
+                            {{ exercise.get_exercise_type_display }}
+                        </span>
+                    </dd>
+                    
+                    <dt class="col-sm-5">Created by:</dt>
+                    <dd class="col-sm-7">{{ exercise.created_by.username }}</dd>
+                    
+                    <dt class="col-sm-5">Created:</dt>
+                    <dd class="col-sm-7">{{ exercise.created_at|date:"M d, Y" }}</dd>
+                    
+                    <dt class="col-sm-5">Test Cases:</dt>
+                    <dd class="col-sm-7">{{ exercise.test_strings|length }}</dd>
+                    
+                    <dt class="col-sm-5">Public:</dt>
+                    <dd class="col-sm-7">
+                        {% if exercise.is_public %}
+                            <i class="fas fa-check text-success"></i> Yes
+                        {% else %}
+                            <i class="fas fa-times text-danger"></i> No
+                        {% endif %}
+                    </dd>
+                </dl>
+            </div>
+        </div>
+        
+        {% if user_solution %}
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-check-circle"></i> Your Solution
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert {% if user_solution.is_correct %}alert-success{% else %}alert-warning{% endif %}">
+                        <h6>
+                            {% if user_solution.is_correct %}
+                                <i class="fas fa-check-circle"></i> Correct Solution!
+                            {% else %}
+                                <i class="fas fa-exclamation-triangle"></i> Needs Improvement
+                            {% endif %}
+                        </h6>
+                        <p class="mb-0">Score: {{ user_solution.score }}%</p>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <strong>Solution Automaton:</strong>
+                        {% if user_solution.dfa_solution %}
+                            <a href="{% url 'core:dfa_detail' user_solution.dfa_solution.pk %}" class="btn btn-sm btn-primary">
+                                <i class="fas fa-eye"></i> View DFA
+                            </a>
+                        {% elif user_solution.nfa_solution %}
+                            <a href="{% url 'core:nfa_detail' user_solution.nfa_solution.pk %}" class="btn btn-sm btn-success">
+                                <i class="fas fa-eye"></i> View NFA
+                            </a>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="d-grid">
+                        <a href="{% url 'core:submit_solution' exercise.pk %}" class="btn btn-info">
+                            <i class="fas fa-sync"></i> Retest Solution
+                        </a>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-play"></i> Get Started
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p>Ready to solve this exercise?</p>
+                    <div class="d-grid">
+                        <a href="{% url 'core:start_exercise' exercise.pk %}" class="btn btn-primary">
+                            <i class="fas fa-play"></i> Start Exercise
+                        </a>
+                    </div>
+                    
+                    <hr>
+                    
+                    <h6>What happens when you start:</h6>
+                    <ul class="small">
+                        <li>A new automaton will be created for you</li>
+                        <li>You can build your solution step by step</li>
+                        <li>Test your solution against the test cases</li>
+                        <li>Submit when you're ready</li>
+                    </ul>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+
+{% block title %}Import Automaton - Finite Automata Manager{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0">
+                    <i class="fas fa-upload"></i> Import Automaton
+                </h4>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.format_type.id_for_label }}" class="form-label">Import Format</label>
+                        {{ form.format_type }}
+                        {% if form.format_type.errors %}
+                            <div class="text-danger">
+                                {% for error in form.format_type.errors %}
+                                    <small>{{ error }}</small>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.file_content.id_for_label }}" class="form-label">Automaton Definition</label>
+                        {{ form.file_content }}
+                        <div class="form-text">{{ form.file_content.help_text }}</div>
+                        {% if form.file_content.errors %}
+                            <div class="text-danger">
+                                {% for error in form.file_content.errors %}
+                                    <small>{{ error }}</small>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{% url 'core:dashboard' %}" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-upload"></i> Import Automaton
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-info-circle"></i> Import Format
+                </h5>
+            </div>
+            <div class="card-body">
+                <h6>JSON Format Example:</h6>
+                <pre class="small">{
+  "name": "Example DFA",
+  "type": "DFA",
+  "states": ["q0", "q1", "q2"],
+  "alphabet": ["0", "1"],
+  "start_state": "q0",
+  "final_states": ["q2"],
+  "transitions": [
+    {"from": "q0", "symbol": "0", "to": "q1"},
+    {"from": "q1", "symbol": "1", "to": "q2"}
+  ]
+}</pre>
+                
+                <hr>
+                
+                <h6>Required Fields:</h6>
+                <ul class="small">
+                    <li><code>name</code> - Automaton name</li>
+                    <li><code>type</code> - "DFA" or "NFA"</li>
+                    <li><code>states</code> - Array of state names</li>
+                    <li><code>alphabet</code> - Array of symbols</li>
+                    <li><code>start_state</code> - Initial state</li>
+                    <li><code>final_states</code> - Array of accept states</li>
+                    <li><code>transitions</code> - Array of transition objects</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
