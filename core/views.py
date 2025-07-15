@@ -9,7 +9,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 
-from .models import DFA, NFA, DFAState, NFAState, DFATransition, NFATransition
+from .models import DFA, NFA, DFAState, NFAState, DFATransition, NFATransition, UserHistory
 from .forms import DFACreateForm, NFACreateForm
 
 # --- Helper Function ---
@@ -74,6 +74,32 @@ class DashboardView(LoginRequiredMixin, ListView):
         all_nfas = user_nfas.union(system_nfas)
         
         return {'dfas': all_dfas, 'nfas': all_nfas}
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Add user history for dashboard
+        recent_history = UserHistory.objects.filter(
+            user=self.request.user
+        ).select_related('user')[:10]
+        
+        context['recent_history'] = recent_history
+        
+        # Add statistics
+        context['stats'] = {
+            'total_created': UserHistory.objects.filter(
+                user=self.request.user, 
+                action='create'
+            ).count(),
+            'total_simulations': UserHistory.objects.filter(
+                user=self.request.user, 
+                action='simulate'
+            ).count(),
+            'dfas_count': DFA.objects.filter(owner=self.request.user).count(),
+            'nfas_count': NFA.objects.filter(owner=self.request.user).count(),
+        }
+        
+        return context
 
 class ExercisesListView(ListView):
     template_name = 'automaton/exercises_list.html'
@@ -107,6 +133,15 @@ class AutomatonDetailView(LoginRequiredMixin, DetailView):
         automaton = self.get_object()
         context['is_nfa'] = isinstance(automaton, NFA)
         context['is_dfa'] = isinstance(automaton, DFA)
+        
+        # Removed view logging for better UX
+        
+        # Add FA type check
+        fa_type, is_valid, message = automaton.check_fa_type()
+        context['fa_type'] = fa_type
+        context['fa_type_valid'] = is_valid
+        context['fa_type_message'] = message
+        
         # Add a simple filter for use in templates
         from django.template.defaultfilters import register
         @register.filter
@@ -121,8 +156,21 @@ class DFACreateView(LoginRequiredMixin, CreateView):
     template_name = 'automaton/create_dfa.html'
 
     def form_valid(self, form):
-        form.instance.owner = self.request.user
-        return super().form_valid(form)
+        # Create the DFA immediately and redirect to editing
+        dfa = form.save(commit=False)
+        dfa.owner = self.request.user
+        dfa.is_example = False
+        dfa.save()
+        
+        # Log creation action
+        UserHistory.log_action(
+            user=self.request.user,
+            automaton=dfa,
+            action='create',
+            details={'automaton_type': 'DFA'}
+        )
+        
+        return redirect('core:automaton_detail', pk=dfa.pk)
 
     def get_success_url(self):
         return reverse_lazy('core:automaton_detail', kwargs={'pk': self.object.pk})
@@ -133,8 +181,21 @@ class NFACreateView(LoginRequiredMixin, CreateView):
     template_name = 'automaton/create_nfa.html'
 
     def form_valid(self, form):
-        form.instance.owner = self.request.user
-        return super().form_valid(form)
+        # Create the NFA immediately and redirect to editing
+        nfa = form.save(commit=False)
+        nfa.owner = self.request.user
+        nfa.is_example = False
+        nfa.save()
+        
+        # Log creation action
+        UserHistory.log_action(
+            user=self.request.user,
+            automaton=nfa,
+            action='create',
+            details={'automaton_type': 'NFA'}
+        )
+        
+        return redirect('core:automaton_detail', pk=nfa.pk)
 
     def get_success_url(self):
         return reverse_lazy('core:automaton_detail', kwargs={'pk': self.object.pk})
@@ -196,19 +257,71 @@ def add_state(request, pk):
     automaton = get_automaton_instance(pk, request.user)
     StateModel, _ = get_automaton_related_models(automaton)
     data = json.loads(request.body)
-    state_name = data.get('name')
+    state_names_input = data.get('name')
 
-    if not state_name:
+    if not state_names_input:
         return JsonResponse({'status': 'error', 'message': 'State name cannot be empty.'}, status=400)
 
+    # Handle multiple states separated by commas
+    state_names = [name.strip() for name in state_names_input.split(',') if name.strip()]
+    
+    if not state_names:
+        return JsonResponse({'status': 'error', 'message': 'No valid state names provided.'}, status=400)
+
     try:
-        # If no other states exist, make this the start state
-        is_start = not StateModel.objects.filter(automaton=automaton).exists()
-        StateModel.objects.create(automaton=automaton, name=state_name, is_start=is_start)
+        # Check if no other states exist to determine if first state should be start state
+        is_first_state = not StateModel.objects.filter(automaton=automaton).exists()
+        
+        created_states = []
+        existing_states = []
+        
+        for i, state_name in enumerate(state_names):
+            try:
+                # Only make the first state in the list the start state if no states exist
+                is_start = is_first_state and i == 0
+                new_state = StateModel.objects.create(
+                    automaton=automaton, 
+                    name=state_name, 
+                    is_start=is_start
+                )
+                created_states.append(state_name)
+            except IntegrityError:
+                existing_states.append(state_name)
+        
+        # Auto-save: update JSON representation and save
         automaton.update_json_representation()
-        return JsonResponse({'status': 'ok', 'message': 'State added successfully.'})
-    except IntegrityError:
-        return JsonResponse({'status': 'error', 'message': f"A state with the name '{state_name}' already exists."}, status=400)
+        automaton.save()
+        
+        # Log edit action only when states are actually created
+        if created_states:
+            UserHistory.log_action(
+                user=request.user,
+                automaton=automaton,
+                action='edit',
+                details={
+                    'action_type': 'add_states',
+                    'states_added': created_states
+                }
+            )
+        
+        # Prepare response message
+        if created_states and existing_states:
+            message = f"Created states: {', '.join(created_states)}. States already exist: {', '.join(existing_states)}."
+        elif created_states:
+            message = f"Created {len(created_states)} state(s): {', '.join(created_states)}."
+        else:
+            message = f"All states already exist: {', '.join(existing_states)}."
+        
+        # Return success even if some states already existed
+        return JsonResponse({
+            'status': 'ok' if created_states else 'warning',
+            'message': message,
+            'created_count': len(created_states),
+            'existing_count': len(existing_states)
+        })
+        
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': f'Error creating states: {str(e)}'}, status=500)
 
 @login_required
 @require_POST
@@ -230,7 +343,21 @@ def update_state(request, pk):
         else:
             return JsonResponse({'status': 'error', 'message': 'Invalid action.'}, status=400)
     
+    # Auto-save: update JSON representation and save
     state.automaton.update_json_representation()
+    state.automaton.save()
+    
+    # Log edit action
+    UserHistory.log_action(
+        user=request.user,
+        automaton=state.automaton,
+        action='edit',
+        details={
+            'action_type': f'update_state_{action}',
+            'state_name': state.name
+        }
+    )
+    
     return JsonResponse({'status': 'ok'})
 
 @login_required
@@ -241,7 +368,10 @@ def delete_state(request, pk):
     state = get_object_or_404(StateModel, pk=data.get('state_pk'))
     automaton = state.automaton
     state.delete()
+    
+    # Auto-save: update JSON representation and save
     automaton.update_json_representation()
+    automaton.save()
     return JsonResponse({'status': 'ok'})
 
 @login_required
@@ -293,7 +423,24 @@ def add_transition(request, pk):
                     return JsonResponse({'status': 'error', 'message': 'This DFA already has a transition for this state and symbol.'}, status=400)
 
         TransitionModel.objects.create(automaton=automaton, from_state=from_state, to_state=to_state, symbol=symbol)
+        
+        # Auto-save: update JSON representation and save
         automaton.update_json_representation()
+        automaton.save()
+        
+        # Log edit action
+        UserHistory.log_action(
+            user=request.user,
+            automaton=automaton,
+            action='edit',
+            details={
+                'action_type': 'add_transition',
+                'from_state': from_state.name,
+                'to_state': to_state.name,
+                'symbol': symbol
+            }
+        )
+        
         return JsonResponse({'status': 'ok', 'message': 'Transition added.'})
     except StateModel.DoesNotExist:
         return JsonResponse({'status': 'error', 'message': 'State not found.'}, status=404)
@@ -308,7 +455,10 @@ def delete_transition(request, pk):
     transition = get_object_or_404(TransitionModel, pk=data.get('transition_pk'))
     automaton = transition.automaton
     transition.delete()
+    
+    # Auto-save: update JSON representation and save
     automaton.update_json_representation()
+    automaton.save()
     return JsonResponse({'status': 'ok'})
 
 # --- Core Functionality Views ---
@@ -327,6 +477,8 @@ def simulate_string(request, pk):
     # The simulate method needs to be updated to return a path
     accepted, message, *path_data = automaton.simulate(input_string)
     path = path_data[0] if path_data else []
+    
+    # Removed simulation logging for better UX - only log create/edit actions
 
     return JsonResponse({'accepted': accepted, 'message': message, 'path': path})
 
@@ -355,6 +507,20 @@ def convert_nfa_to_dfa(request, pk):
             return JsonResponse({'status': 'error', 'message': 'Permission denied.'}, status=403)
         
         dfa = nfa.to_dfa()
+        
+        # Log conversion action
+        UserHistory.log_action(
+            user=request.user,
+            automaton=nfa,
+            action='convert',
+            details={
+                'from_type': 'NFA',
+                'to_type': 'DFA',
+                'result_dfa_id': dfa.id,
+                'result_dfa_name': dfa.name
+            }
+        )
+        
         return JsonResponse({
             'status': 'success', 
             'message': 'NFA successfully converted to DFA.',
@@ -373,6 +539,20 @@ def minimize_dfa(request, pk):
             return JsonResponse({'status': 'error', 'message': 'Permission denied.'}, status=403)
         
         minimized_dfa = dfa.minimize()
+        
+        # Log minimization action
+        UserHistory.log_action(
+            user=request.user,
+            automaton=dfa,
+            action='minimize',
+            details={
+                'original_states': dfa.states.count(),
+                'minimized_states': minimized_dfa.states.count(),
+                'was_already_minimal': minimized_dfa == dfa,
+                'result_dfa_id': minimized_dfa.id if minimized_dfa != dfa else dfa.id
+            }
+        )
+        
         if minimized_dfa == dfa:
             return JsonResponse({
                 'status': 'info',
@@ -393,3 +573,16 @@ def check_if_nfa_is_dfa(request, pk):
     nfa = get_object_or_404(NFA, pk=pk, owner=request.user)
     is_dfa, message = nfa.is_dfa()
     return JsonResponse({'is_dfa': is_dfa, 'message': message})
+
+@login_required
+def check_fa_type(request, pk):
+    """Generic FA type checker for any automaton."""
+    automaton = get_automaton_instance(pk, request.user)
+    fa_type, is_valid, message = automaton.check_fa_type()
+    
+    return JsonResponse({
+        'fa_type': fa_type,
+        'is_valid': is_valid,
+        'message': message,
+        'current_type': 'DFA' if isinstance(automaton, DFA) else 'NFA'
+    })

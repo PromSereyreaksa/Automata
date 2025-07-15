@@ -1,0 +1,95 @@
+{% extends "automaton/base.html" %}
+
+{% block title %}Confirm DFA Creation{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header text-center">
+                <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                <h3 class="card-title mb-0">Confirm DFA Creation</h3>
+                <p class="text-muted mb-0">Review your automaton before creating</p>
+            </div>
+            <div class="card-body">
+                <!-- Preview Section -->
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5 class="text-primary mb-3">
+                            <i class="fas fa-info-circle me-2"></i>Automaton Details
+                        </h5>
+                        <div class="list-group list-group-flush">
+                            <div class="list-group-item d-flex justify-content-between">
+                                <strong>Name:</strong>
+                                <span>{{ name }}</span>
+                            </div>
+                            <div class="list-group-item d-flex justify-content-between">
+                                <strong>Type:</strong>
+                                <span class="badge bg-primary">{{ automaton_type }}</span>
+                            </div>
+                            <div class="list-group-item d-flex justify-content-between">
+                                <strong>Alphabet:</strong>
+                                <span>{{ alphabet }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h5 class="text-primary mb-3">
+                            <i class="fas fa-list me-2"></i>Alphabet Symbols
+                        </h5>
+                        <div class="d-flex flex-wrap gap-2">
+                            {% for symbol in alphabet_symbols %}
+                                <span class="badge bg-info">{{ symbol|striptags }}</span>
+                            {% endfor %}
+                        </div>
+                        
+                        <div class="mt-4">
+                            <h6 class="text-secondary">Next Steps:</h6>
+                            <ul class="list-unstyled text-muted small">
+                                <li><i class="fas fa-check-circle text-success me-1"></i> Add states to your automaton</li>
+                                <li><i class="fas fa-check-circle text-success me-1"></i> Define transitions between states</li>
+                                <li><i class="fas fa-check-circle text-success me-1"></i> Test with input strings</li>
+                                <li><i class="fas fa-check-circle text-success me-1"></i> Visualize your automaton</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Confirmation Form -->
+                <form method="post" class="mt-4">
+                    {% csrf_token %}
+                    <!-- Pass the form data through hidden fields -->
+                    <input type="hidden" name="name" value="{{ name }}">
+                    <input type="hidden" name="alphabet" value="{{ alphabet }}">
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <button type="submit" name="action" value="confirm" class="btn btn-success btn-lg w-100">
+                                <i class="fas fa-check me-2"></i>Create DFA
+                            </button>
+                        </div>
+                        <div class="col-md-6">
+                            <button type="submit" name="action" value="cancel" class="btn btn-outline-secondary btn-lg w-100">
+                                <i class="fas fa-times me-2"></i>Cancel
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-body">
+                <h6 class="card-title">
+                    <i class="fas fa-lightbulb me-2"></i>About DFAs
+                </h6>
+                <p class="card-text small text-muted">
+                    A Deterministic Finite Automaton (DFA) is a finite state machine that accepts or rejects strings of symbols. 
+                    For each state and input symbol, there is exactly one transition to another state. 
+                    Once created, you can add states, define transitions, and test your automaton with different input strings.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

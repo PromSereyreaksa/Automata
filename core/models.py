@@ -19,6 +19,7 @@ class Automaton(models.Model):
     json_representation = models.JSONField(null=True, blank=True, help_text="JSON representation for graph visualization")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    is_example = models.BooleanField(default=False, help_text="True if this is a system example automaton")
 
     class Meta:
         abstract = True
@@ -60,6 +61,72 @@ class Automaton(models.Model):
         self.json_representation = {'nodes': nodes, 'edges': edges}
         self.save()
 
+    def check_fa_type(self):
+        """
+        Generic FA checker that determines if the automaton is DFA, NFA, or invalid.
+        Returns tuple: (fa_type, is_valid, message)
+        where fa_type is 'DFA', 'NFA', or 'INVALID'
+        """
+        # Basic validation checks
+        start_states = self.states.filter(is_start=True)
+        if not start_states.exists():
+            return 'INVALID', False, "No start state defined"
+        
+        final_states = self.states.filter(is_final=True)
+        if not final_states.exists():
+            return 'INVALID', False, "No final state defined"
+        
+        # Check for epsilon transitions
+        has_epsilon = False
+        for transition in self.transitions.all():
+            if not transition.symbol or transition.symbol == 'ε':
+                has_epsilon = True
+                break
+        
+        # If has epsilon transitions, it's definitely NFA
+        if has_epsilon:
+            return 'NFA', True, "Automaton has epsilon transitions (NFA)"
+        
+        # Check for multiple start states
+        if start_states.count() > 1:
+            return 'NFA', True, "Automaton has multiple start states (NFA)"
+        
+        # Check for nondeterministic transitions
+        alphabet = self.get_alphabet_as_set()
+        for state in self.states.all():
+            for symbol in alphabet:
+                matching_transitions = []
+                for trans in self.transitions.filter(from_state=state):
+                    if trans.matches_symbol(symbol):
+                        matching_transitions.append(trans)
+                
+                # Multiple transitions for same symbol = NFA
+                if len(matching_transitions) > 1:
+                    return 'NFA', True, f"State '{state.name}' has multiple transitions for symbol '{symbol}' (NFA)"
+                
+                # Missing transition for some symbol = incomplete DFA
+                # But this doesn't make it NFA, just incomplete DFA
+        
+        # Check if it's a complete DFA (every state has transition for every symbol)
+        is_complete = True
+        incomplete_details = []
+        
+        for state in self.states.all():
+            for symbol in alphabet:
+                matching_transitions = []
+                for trans in self.transitions.filter(from_state=state):
+                    if trans.matches_symbol(symbol):
+                        matching_transitions.append(trans)
+                
+                if len(matching_transitions) == 0:
+                    is_complete = False
+                    incomplete_details.append(f"State '{state.name}' missing transition for '{symbol}'")
+        
+        if is_complete:
+            return 'DFA', True, "Complete deterministic finite automaton"
+        else:
+            return 'DFA', True, f"Incomplete DFA (missing transitions: {'; '.join(incomplete_details[:3])}{'...' if len(incomplete_details) > 3 else ''})"
+
     def __str__(self):
         return self.name
 
@@ -90,13 +157,52 @@ class Transition(models.Model):
         abstract = True
 
     def get_symbols_as_set(self):
-        """Returns the symbols in this transition as a set."""
+        """Returns the symbols in this transition as a set, supporting ranges like a-z, 0-9."""
+        import re
+        import string
+        
         if not self.symbol:
             return {'ε'}  # Epsilon transition
         if self.symbol == 'ε':
             return {'ε'}
-        # Handle comma-separated symbols like "a,b"
-        return set(s.strip() for s in self.symbol.split(',') if s.strip())
+        
+        symbols = set()
+        parts = [s.strip() for s in self.symbol.split(',') if s.strip()]
+        
+        for part in parts:
+            # Check for range patterns like a-z, 0-9, A-Z
+            range_match = re.match(r'^([a-zA-Z0-9])-([a-zA-Z0-9])$', part)
+            if range_match:
+                start_char, end_char = range_match.groups()
+                
+                # Handle lowercase letters
+                if start_char.islower() and end_char.islower():
+                    start_ord = ord(start_char)
+                    end_ord = ord(end_char)
+                    if start_ord <= end_ord:
+                        symbols.update(chr(i) for i in range(start_ord, end_ord + 1))
+                
+                # Handle uppercase letters
+                elif start_char.isupper() and end_char.isupper():
+                    start_ord = ord(start_char)
+                    end_ord = ord(end_char)
+                    if start_ord <= end_ord:
+                        symbols.update(chr(i) for i in range(start_ord, end_ord + 1))
+                
+                # Handle digits
+                elif start_char.isdigit() and end_char.isdigit():
+                    start_ord = ord(start_char)
+                    end_ord = ord(end_char)
+                    if start_ord <= end_ord:
+                        symbols.update(chr(i) for i in range(start_ord, end_ord + 1))
+                else:
+                    # Invalid range, treat as literal
+                    symbols.add(part)
+            else:
+                # Regular symbol
+                symbols.add(part)
+        
+        return symbols
 
     def clean(self):
         # Ensure the symbols are in the automaton's alphabet (except for epsilon transitions)
@@ -224,8 +330,24 @@ class DFA(Automaton):
                         # Check if this pair should be marked
                         for symbol in alphabet:
                             try:
-                                trans_i = self.transitions.get(from_state=states[i], symbol=symbol)
-                                trans_j = self.transitions.get(from_state=states[j], symbol=symbol)
+                                # Find transition that matches this symbol
+                                trans_i = None
+                                for trans in self.transitions.filter(from_state=states[i]):
+                                    if trans.matches_symbol(symbol):
+                                        trans_i = trans
+                                        break
+                                
+                                trans_j = None
+                                for trans in self.transitions.filter(from_state=states[j]):
+                                    if trans.matches_symbol(symbol):
+                                        trans_j = trans
+                                        break
+                                
+                                if not trans_i or not trans_j:
+                                    # If either transition doesn't exist, states are distinguishable
+                                    distinguishable[i][j] = True
+                                    changed = True
+                                    break
                                 
                                 # Find indices of destination states
                                 dest_i_idx = states.index(trans_i.to_state)
@@ -303,8 +425,14 @@ class DFA(Automaton):
             new_from_state = state_map[old_state]
             
             for symbol in alphabet:
-                try:
-                    old_transition = self.transitions.get(from_state=old_state, symbol=symbol)
+                # Find transition that matches this symbol
+                old_transition = None
+                for trans in self.transitions.filter(from_state=old_state):
+                    if trans.matches_symbol(symbol):
+                        old_transition = trans
+                        break
+                
+                if old_transition:
                     new_to_state = state_map[old_transition.to_state]
                     
                     # Avoid duplicate transitions
@@ -316,8 +444,6 @@ class DFA(Automaton):
                             symbol=symbol
                         )
                         created_transitions.add(transition_key)
-                except:
-                    pass  # Skip if transition doesn't exist
         
         # Update JSON representation
         minimized_dfa.update_json_representation()
@@ -456,7 +582,7 @@ class NFA(Automaton):
             return closure
         
         # Get all start states and their epsilon closure
-        start_states = set(self.get_start_states())
+        start_states = set(self.states.filter(is_start=True))
         if not start_states:
             raise ValueError("NFA must have at least one start state")
         
@@ -610,3 +736,51 @@ class NFA(Automaton):
                 to_state=to_state, 
                 symbol=symbol_str
             ).delete()
+
+
+class UserHistory(models.Model):
+    """Track user interactions with automata for history and analytics."""
+    ACTION_CHOICES = [
+        ('create', 'Created'),
+        ('view', 'Viewed'),
+        ('edit', 'Edited'),
+        ('simulate', 'Simulated'),
+        ('minimize', 'Minimized'),
+        ('convert', 'Converted'),
+        ('delete', 'Deleted'),
+    ]
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='automata_history')
+    automaton_id = models.PositiveIntegerField()  # Store ID even if automaton is deleted
+    automaton_name = models.CharField(max_length=255)
+    automaton_type = models.CharField(max_length=10, choices=[('DFA', 'DFA'), ('NFA', 'NFA')])
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    details = models.JSONField(null=True, blank=True)  # Store action-specific data
+    
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['user', '-timestamp']),
+            models.Index(fields=['user', 'action']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.username} {self.action} {self.automaton_name} at {self.timestamp}"
+
+    @classmethod
+    def log_action(cls, user, automaton, action, details=None):
+        """Helper method to log user actions."""
+        if not user or not automaton:
+            return
+        
+        automaton_type = 'DFA' if isinstance(automaton, DFA) else 'NFA'
+        
+        return cls.objects.create(
+            user=user,
+            automaton_id=automaton.id,
+            automaton_name=automaton.name,
+            automaton_type=automaton_type,
+            action=action,
+            details=details or {}
+        )

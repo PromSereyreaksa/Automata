@@ -27,8 +27,9 @@ urlpatterns = [
     path('api/automaton/<int:pk>/add-transition/', views.add_transition, name='add_transition'),
     path('api/automaton/<int:pk>/delete-transition/', views.delete_transition, name='delete_transition'),
     
-    # Advanced operations (placeholders)
+    # Advanced operations
     path('api/nfa/<int:pk>/to-dfa/', views.convert_nfa_to_dfa, name='convert_nfa_to_dfa'),
     path('api/dfa/<int:pk>/minimize/', views.minimize_dfa, name='minimize_dfa'),
     path('api/nfa/<int:pk>/is-dfa/', views.check_if_nfa_is_dfa, name='check_if_nfa_is_dfa'),
+    path('api/automaton/<int:pk>/check-fa-type/', views.check_fa_type, name='check_fa_type'),
 ]
