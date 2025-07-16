@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 from django.contrib.auth.models import User
-from core.models import DFA, NFA, DFAState, NFAState, DFATransition, NFATransition
+from core.models import Automaton, State, Transition
 
 class Command(BaseCommand):
     help = 'Populate the database with example DFA and NFA exercises'
@@ -20,8 +20,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS('Created system user for examples'))
 
         # Clear existing examples
-        DFA.objects.filter(owner=system_user).delete()
-        NFA.objects.filter(owner=system_user).delete()
+        Automaton.objects.filter(owner=system_user).delete()
 
         # Create DFA Examples
         self.create_dfa_examples(system_user)
@@ -35,21 +34,21 @@ class Command(BaseCommand):
         """Create example DFAs"""
         
         # Example 1: DFA that accepts strings with even number of 'a's
-        dfa1 = DFA.objects.create(
+        dfa1 = Automaton.objects.create(
             name="Even number of 'a's",
             alphabet="a,b",
             owner=user
         )
         
         # States
-        q0 = DFAState.objects.create(automaton=dfa1, name="q0", is_start=True, is_final=True)
-        q1 = DFAState.objects.create(automaton=dfa1, name="q1", is_start=False, is_final=False)
+        q0 = State.objects.create(automaton=dfa1, name="q0", is_start=True, is_final=True)
+        q1 = State.objects.create(automaton=dfa1, name="q1", is_start=False, is_final=False)
         
         # Transitions
-        DFATransition.objects.create(automaton=dfa1, from_state=q0, to_state=q1, symbol="a")
-        DFATransition.objects.create(automaton=dfa1, from_state=q0, to_state=q0, symbol="b")
-        DFATransition.objects.create(automaton=dfa1, from_state=q1, to_state=q0, symbol="a")
-        DFATransition.objects.create(automaton=dfa1, from_state=q1, to_state=q1, symbol="b")
+        Transition.objects.create(automaton=dfa1, from_state=q0, to_state=q1, symbol="a")
+        Transition.objects.create(automaton=dfa1, from_state=q0, to_state=q0, symbol="b")
+        Transition.objects.create(automaton=dfa1, from_state=q1, to_state=q0, symbol="a")
+        Transition.objects.create(automaton=dfa1, from_state=q1, to_state=q1, symbol="b")
         
         dfa1.update_json_representation()
 

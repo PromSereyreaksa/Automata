@@ -1,0 +1,183 @@
+{% extends 'automaton/base.html' %}
+
+{% block title %}FA Type Checker{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="page-title">
+            <i class="fas fa-search me-3"></i>
+            FA Type Checker
+        </h1>
+        <p class="text-muted mb-4">Analyze any finite automaton to determine if it's a DFA, NFA, or invalid</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Select Automaton to Analyze</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <select id="automaton-select" class="form-select">
+                        <option value="">Select an automaton...</option>
+                        {% for automaton in automatons %}
+                        <option value="{{ automaton.id }}">{{ automaton.name }} ({{ automaton.alphabet }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button id="analyze-btn" class="btn btn-primary" disabled>
+                    <i class="fas fa-search me-2"></i>Analyze FA Type
+                </button>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0">Classification Rules</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-12">
+                        <h6 class="text-success">DFA Requirements:</h6>
+                        <ul class="small">
+                            <li>Exactly one start state</li>
+                            <li>At least one final state</li>
+                            <li>No epsilon (ε) transitions</li>
+                            <li>For every state q and symbol a, exactly one transition</li>
+                        </ul>
+                    </div>
+                    <div class="col-12 mt-3">
+                        <h6 class="text-info">NFA Characteristics:</h6>
+                        <ul class="small">
+                            <li>One or more start states</li>
+                            <li>At least one final state</li>
+                            <li>May have epsilon (ε) transitions</li>
+                            <li>May have multiple transitions for same state-symbol pair</li>
+                            <li>May have missing transitions</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Analysis Result</h5>
+            </div>
+            <div class="card-body">
+                <div id="analysis-result">
+                    <div class="text-center text-muted">
+                        <i class="fas fa-info-circle fa-3x mb-3"></i>
+                        <p>Select an automaton and click "Analyze FA Type" to see results</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0">Automaton Details</h5>
+            </div>
+            <div class="card-body">
+                <div id="automaton-details">
+                    <div class="text-center text-muted">
+                        <i class="fas fa-clipboard-list fa-3x mb-3"></i>
+                        <p>Automaton details will appear here</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const automatonSelect = document.getElementById('automaton-select');
+    const analyzeBtn = document.getElementById('analyze-btn');
+    const analysisResult = document.getElementById('analysis-result');
+    const automatonDetails = document.getElementById('automaton-details');
+    
+    automatonSelect.addEventListener('change', function() {
+        const selectedId = this.value;
+        analyzeBtn.disabled = !selectedId;
+        
+        if (selectedId) {
+            // Show basic automaton info
+            const selectedOption = this.options[this.selectedIndex];
+            const name = selectedOption.text.split(' (')[0];
+            const alphabet = selectedOption.text.split(' (')[1]?.replace(')', '');
+            
+            automatonDetails.innerHTML = `
+                <h6>Selected Automaton:</h6>
+                <p><strong>Name:</strong> ${name}</p>
+                <p><strong>Alphabet:</strong> ${alphabet}</p>
+                <p class="text-muted">Click "Analyze FA Type" for detailed analysis</p>
+            `;
+        } else {
+            automatonDetails.innerHTML = `
+                <div class="text-center text-muted">
+                    <i class="fas fa-clipboard-list fa-3x mb-3"></i>
+                    <p>Automaton details will appear here</p>
+                </div>
+            `;
+        }
+    });
+    
+    analyzeBtn.addEventListener('click', async function() {
+        const selectedId = automatonSelect.value;
+        if (!selectedId) return;
+        
+        analysisResult.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Analyzing...';
+        analyzeBtn.disabled = true;
+        
+        try {
+            const response = await fetch(`/automata/api/automaton/${selectedId}/check-type/`);
+            const result = await response.json();
+            
+            let badgeClass = 'secondary';
+            let iconClass = 'fas fa-question';
+            
+            if (result.fa_type === 'DFA') {
+                badgeClass = 'success';
+                iconClass = 'fas fa-cog';
+            } else if (result.fa_type === 'NFA') {
+                badgeClass = 'info';
+                iconClass = 'fas fa-network-wired';
+            } else {
+                badgeClass = 'danger';
+                iconClass = 'fas fa-exclamation-triangle';
+            }
+            
+            analysisResult.innerHTML = `
+                <div class="alert alert-${badgeClass === 'danger' ? 'danger' : 'primary'}">
+                    <h6><i class="${iconClass} me-2"></i>Classification Result</h6>
+                    <p class="mb-2">
+                        <span class="badge bg-${badgeClass} fs-6">${result.fa_type}</span>
+                    </p>
+                    <p class="mb-0"><strong>Analysis:</strong> ${result.message}</p>
+                    ${result.is_valid ? '<p class="mb-0 text-success"><i class="fas fa-check me-1"></i>Valid automaton</p>' : '<p class="mb-0 text-danger"><i class="fas fa-times me-1"></i>Invalid automaton</p>'}
+                </div>
+            `;
+            
+            // Update automaton details with more info
+            automatonDetails.innerHTML += `
+                <hr>
+                <h6>Analysis Details:</h6>
+                <p><strong>Classification:</strong> ${result.fa_type}</p>
+                <p><strong>Valid:</strong> ${result.is_valid ? 'Yes' : 'No'}</p>
+            `;
+            
+        } catch (error) {
+            analysisResult.innerHTML = `<div class="alert alert-danger">Analysis failed: ${error.message}</div>`;
+        } finally {
+            analyzeBtn.disabled = false;
+        }
+    });
+});
+</script>
+{% endblock %}

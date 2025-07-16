@@ -5,7 +5,7 @@ from django.urls import reverse
 from django.db import IntegrityError
 import json
 
-from .models import DFA, NFA, DFAState, NFAState, DFATransition, NFATransition
+from .models import Automaton, State, Transition
 
 
 class AutomatonModelTest(TestCase):

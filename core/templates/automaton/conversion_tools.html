@@ -1,0 +1,269 @@
+{% extends 'automaton/base.html' %}
+
+{% block title %}Convert & Minimize{% endblock %}
+
+{% block content %}
+{% csrf_token %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="page-title">
+            <i class="fas fa-exchange-alt me-3"></i>
+            Convert & Minimize
+        </h1>
+        <p class="text-muted mb-4">Convert NFAs to DFAs and minimize DFAs globally</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-arrow-right me-2"></i>NFA to DFA Conversion
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="nfa-select" class="form-label">Select NFA:</label>
+                    <select id="nfa-select" class="form-select">
+                        <option value="">Select an NFA...</option>
+                        {% for nfa in nfas %}
+                        <option value="{{ nfa.id }}">{{ nfa.name }} ({{ nfa.alphabet }})</option>
+                        {% endfor %}
+                    </select>
+                    <small class="form-text text-muted">{{ nfas|length }} NFAs available</small>
+                </div>
+                <button id="convert-nfa-btn" class="btn btn-primary mb-3" disabled>
+                    <i class="fas fa-exchange-alt me-2"></i>Convert to DFA
+                </button>
+                <div id="nfa-conversion-steps"></div>
+                <div id="nfa-conversion-result"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-compress-alt me-2"></i>DFA Minimization
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="dfa-select" class="form-label">Select DFA:</label>
+                    <select id="dfa-select" class="form-select">
+                        <option value="">Select a DFA...</option>
+                        {% for dfa in dfas %}
+                        <option value="{{ dfa.id }}">{{ dfa.name }} ({{ dfa.alphabet }})</option>
+                        {% endfor %}
+                    </select>
+                    <small class="form-text text-muted">{{ dfas|length }} DFAs available</small>
+                </div>
+                <button id="minimize-dfa-btn" class="btn btn-success mb-3" disabled>
+                    <i class="fas fa-compress-alt me-2"></i>Minimize DFA
+                </button>
+                <div id="dfa-minimization-steps"></div>
+                <div id="dfa-minimization-result"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Subset Construction Algorithm</h5>
+            </div>
+            <div class="card-body">
+                <ol class="small">
+                    <li>Create initial state from ε-closure of NFA start states</li>
+                    <li>For each new state and alphabet symbol, compute transitions</li>
+                    <li>Create new DFA states from ε-closure of reachable states</li>
+                    <li>Repeat until no new states are generated</li>
+                    <li>Mark final states (states containing NFA final states)</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Table-Filling Algorithm</h5>
+            </div>
+            <div class="card-body">
+                <ol class="small">
+                    <li>Create table for all pairs of states</li>
+                    <li>Mark pairs where one is final and one is not</li>
+                    <li>Iteratively mark distinguishable pairs</li>
+                    <li>Group equivalent states and create minimized DFA</li>
+                    <li>Construct transitions for minimized automaton</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const nfaSelect = document.getElementById('nfa-select');
+    const dfaSelect = document.getElementById('dfa-select');
+    const convertNfaBtn = document.getElementById('convert-nfa-btn');
+    const minimizeDfaBtn = document.getElementById('minimize-dfa-btn');
+    const nfaStepsDiv = document.getElementById('nfa-conversion-steps');
+    const dfaStepsDiv = document.getElementById('dfa-minimization-steps');
+    const nfaResultDiv = document.getElementById('nfa-conversion-result');
+    const dfaResultDiv = document.getElementById('dfa-minimization-result');
+    
+    nfaSelect.addEventListener('change', function() {
+        convertNfaBtn.disabled = !this.value;
+        nfaStepsDiv.innerHTML = '';
+        nfaResultDiv.innerHTML = '';
+    });
+    
+    dfaSelect.addEventListener('change', function() {
+        minimizeDfaBtn.disabled = !this.value;
+        dfaStepsDiv.innerHTML = '';
+        dfaResultDiv.innerHTML = '';
+    });
+    
+    convertNfaBtn.addEventListener('click', async function() {
+        const selectedId = nfaSelect.value;
+        if (!selectedId) return;
+        
+        nfaStepsDiv.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Converting...';
+        convertNfaBtn.disabled = true;
+        
+        try {
+            const response = await fetch(`/automata/api/automaton/${selectedId}/to-dfa/`, {
+                method: 'POST',
+                headers: { 
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'Content-Type': 'application/json'
+                }
+            });
+            const result = await response.json();
+            
+            if (result.status === 'success') {
+                nfaStepsDiv.innerHTML = `
+                    <div class="alert alert-info">
+                        <h6>Subset Construction Algorithm:</h6>
+                        <ol>
+                            <li>Create initial state from ε-closure of NFA start states</li>
+                            <li>For each new state and alphabet symbol, compute transitions</li>
+                            <li>Create new DFA states from ε-closure of reachable states</li>
+                            <li>Repeat until no new states are generated</li>
+                        </ol>
+                    </div>
+                `;
+                nfaResultDiv.innerHTML = `
+                    <div class="alert alert-success">
+                        <h6><i class="fas fa-check-circle me-2"></i>Conversion Complete!</h6>
+                        <p><strong>Result:</strong> DFA "${result.dfa_name}" created successfully!</p>
+                        <a href="/automata/automaton/${result.dfa_id}/" class="btn btn-sm btn-outline-primary">
+                            <i class="fas fa-eye me-1"></i>View DFA
+                        </a>
+                        <button class="btn btn-sm btn-success ms-2" onclick="location.reload()">
+                            <i class="fas fa-sync me-1"></i>Refresh Lists
+                        </button>
+                    </div>
+                `;
+            } else {
+                nfaStepsDiv.innerHTML = `<div class="alert alert-danger">${result.message}</div>`;
+            }
+        } catch (error) {
+            nfaStepsDiv.innerHTML = `<div class="alert alert-danger">Conversion failed: ${error.message}</div>`;
+        } finally {
+            convertNfaBtn.disabled = false;
+        }
+    });
+    
+    minimizeDfaBtn.addEventListener('click', async function() {
+        const selectedId = dfaSelect.value;
+        if (!selectedId) return;
+        
+        dfaStepsDiv.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Minimizing...';
+        minimizeDfaBtn.disabled = true;
+        
+        try {
+            const response = await fetch(`/automata/api/automaton/${selectedId}/minimize/`, {
+                method: 'POST',
+                headers: { 
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'Content-Type': 'application/json'
+                }
+            });
+            const result = await response.json();
+            
+            if (result.status === 'success') {
+                dfaStepsDiv.innerHTML = `
+                    <div class="alert alert-info">
+                        <h6>Table-Filling Algorithm:</h6>
+                        <ol>
+                            <li>Create table for all pairs of states</li>
+                            <li>Mark pairs where one is final and one is not</li>
+                            <li>Iteratively mark distinguishable pairs</li>
+                            <li>Group equivalent states and create minimized DFA</li>
+                        </ol>
+                    </div>
+                `;
+                dfaResultDiv.innerHTML = `
+                    <div class="alert alert-success">
+                        <h6><i class="fas fa-check-circle me-2"></i>Minimization Complete!</h6>
+                        <p><strong>Result:</strong> Minimized DFA "${result.minimized_dfa_name}" created successfully!</p>
+                        <a href="/automata/automaton/${result.minimized_dfa_id}/" class="btn btn-sm btn-outline-primary">
+                            <i class="fas fa-eye me-1"></i>View Minimized DFA
+                        </a>
+                        <button class="btn btn-sm btn-success ms-2" onclick="location.reload()">
+                            <i class="fas fa-sync me-1"></i>Refresh Lists
+                        </button>
+                    </div>
+                `;
+            } else if (result.status === 'info') {
+                dfaStepsDiv.innerHTML = `
+                    <div class="alert alert-info">
+                        <h6>Table-Filling Algorithm:</h6>
+                        <ol>
+                            <li>Create table for all pairs of states</li>
+                            <li>Mark pairs where one is final and one is not</li>
+                            <li>Iteratively mark distinguishable pairs</li>
+                            <li>Group equivalent states and create minimized DFA</li>
+                        </ol>
+                    </div>
+                `;
+                dfaResultDiv.innerHTML = `
+                    <div class="alert alert-info">
+                        <h6><i class="fas fa-info-circle me-2"></i>Minimization Result</h6>
+                        <p><strong>Result:</strong> ${result.message}</p>
+                    </div>
+                `;
+            } else {
+                dfaStepsDiv.innerHTML = `<div class="alert alert-danger">${result.message}</div>`;
+            }
+        } catch (error) {
+            dfaStepsDiv.innerHTML = `<div class="alert alert-danger">Minimization failed: ${error.message}</div>`;
+        } finally {
+            minimizeDfaBtn.disabled = false;
+        }
+    });
+});
+
+// Cookie helper function
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
+{% endblock %}

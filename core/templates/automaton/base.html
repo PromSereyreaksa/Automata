@@ -153,14 +153,20 @@
                             <i class="fas fa-book me-1"></i>Examples
                         </a>
                     </li>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'core:create_automaton' %}">
                             <i class="fas fa-plus me-1"></i>Create
                         </a>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="{% url 'core:create_dfa' %}">New DFA</a></li>
-                            <li><a class="dropdown-item" href="{% url 'core:create_nfa' %}">New NFA</a></li>
-                        </ul>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'core:fa_type_checker' %}">
+                            <i class="fas fa-search me-1"></i>FA Checker
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'core:conversion_tools' %}">
+                            <i class="fas fa-exchange-alt me-1"></i>Convert & Minimize
+                        </a>
                     </li>
                 </ul>
                 

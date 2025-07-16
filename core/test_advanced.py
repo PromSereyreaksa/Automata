@@ -8,7 +8,7 @@ from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 import time
 
-from .models import DFA, NFA, DFAState, NFAState, DFATransition, NFATransition
+from .models import Automaton, State, Transition
 
 
 class EdgeCaseTest(TestCase):

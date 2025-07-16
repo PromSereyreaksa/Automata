@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.http import JsonResponse
 import json
 
-from .models import DFA, NFA
+from .models import Automaton
 
 
 class WebInterfaceTest(TestCase):

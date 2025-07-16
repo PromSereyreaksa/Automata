@@ -1,18 +1,18 @@
 from django import forms
-from .models import DFA, NFA, DFAState, DFATransition, NFAState, NFATransition
+from .models import Automaton, State, Transition
 
 # Common Tailwind CSS classes for form inputs to ensure consistent styling
 text_input_classes = "w-full px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
 select_classes = "w-full px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
 
-class DFACreateForm(forms.ModelForm):
+class AutomatonCreateForm(forms.ModelForm):
     """
-    A form for creating a new Deterministic Finite Automaton (DFA).
+    A form for creating a new Finite Automaton.
     It handles the name and alphabet, which are the initial properties.
     States and transitions will be managed dynamically on the automaton's detail page.
     """
     class Meta:
-        model = DFA
+        model = Automaton
         fields = ['name', 'alphabet']
         widgets = {
             'name': forms.TextInput(attrs={
@@ -28,32 +28,20 @@ class DFACreateForm(forms.ModelForm):
             'alphabet': 'Enter symbols separated by commas.',
         }
 
-class NFACreateForm(forms.ModelForm):
-    """
-    A form for creating a new Nondeterministic Finite Automaton (NFA).
-    Similar to the DFA form, it handles the initial setup.
-    """
-    class Meta:
-        model = NFA
-        fields = ['name', 'alphabet']
-        widgets = {
-            'name': forms.TextInput(attrs={
-                'class': text_input_classes,
-                'placeholder': 'e.g., Ends with "ab"'
-            }),
-            'alphabet': forms.TextInput(attrs={
-                'class': text_input_classes,
-                'placeholder': 'e.g., a,b'
-            }),
-        }
+# Legacy forms for backward compatibility
+class DFACreateForm(AutomatonCreateForm):
+    pass
+
+class NFACreateForm(AutomatonCreateForm):
+    class Meta(AutomatonCreateForm.Meta):
         help_texts = {
             'alphabet': 'Enter symbols separated by commas. Epsilon transitions (ε) are automatically available.',
         }
 
-class DFAStateForm(forms.ModelForm):
-    """Form for creating DFA states."""
+class StateForm(forms.ModelForm):
+    """Form for creating states."""
     class Meta:
-        model = DFAState
+        model = State
         fields = ['name', 'is_start', 'is_final']
         widgets = {
             'name': forms.TextInput(attrs={
@@ -62,22 +50,17 @@ class DFAStateForm(forms.ModelForm):
             }),
         }
 
-class NFAStateForm(forms.ModelForm):
-    """Form for creating NFA states."""
-    class Meta:
-        model = NFAState
-        fields = ['name', 'is_start', 'is_final']
-        widgets = {
-            'name': forms.TextInput(attrs={
-                'class': text_input_classes,
-                'placeholder': 'e.g., q0'
-            }),
-        }
+# Legacy forms for backward compatibility
+class DFAStateForm(StateForm):
+    pass
 
-class DFATransitionForm(forms.ModelForm):
-    """Form for creating DFA transitions with symbol selection."""
+class NFAStateForm(StateForm):
+    pass
+
+class TransitionForm(forms.ModelForm):
+    """Form for creating transitions with symbol selection."""
     class Meta:
-        model = DFATransition
+        model = Transition
         fields = ['from_state', 'to_state', 'symbol']
         widgets = {
             'from_state': forms.Select(attrs={'class': select_classes}),
@@ -97,43 +80,22 @@ class DFATransitionForm(forms.ModelForm):
             # Set symbol choices from alphabet
             alphabet = automaton.get_alphabet_as_set()
             symbol_choices = [(symbol, symbol) for symbol in sorted(alphabet)]
-            self.fields['symbol'].widget = forms.Select(
-                choices=symbol_choices,
-                attrs={'class': select_classes}
-            )
-
-class NFATransitionForm(forms.ModelForm):
-    """Form for creating NFA transitions with symbol selection."""
-    class Meta:
-        model = NFATransition
-        fields = ['from_state', 'to_state', 'symbol']
-        widgets = {
-            'from_state': forms.Select(attrs={'class': select_classes}),
-            'to_state': forms.Select(attrs={'class': select_classes}),
-            'symbol': forms.Select(attrs={'class': select_classes}),
-        }
-
-    def __init__(self, *args, **kwargs):
-        automaton = kwargs.pop('automaton', None)
-        super().__init__(*args, **kwargs)
-        
-        if automaton:
-            # Set state choices
-            self.fields['from_state'].queryset = automaton.states.all()
-            self.fields['to_state'].queryset = automaton.states.all()
             
-            # Set symbol choices from alphabet + epsilon
-            alphabet = automaton.get_alphabet_as_set()
-            symbol_choices = [('ε', 'ε (epsilon)')]  # Epsilon always available for NFA
-            symbol_choices.extend([(symbol, symbol) for symbol in sorted(alphabet)])
-            
-            # Allow multiple symbol selection for NFA (a,b format)
-            symbol_choices.append(('multiple', 'Multiple symbols (a,b)'))
+            # For NFA, add epsilon option
+            if automaton.get_type() == 'NFA':
+                symbol_choices.insert(0, ('ε', 'ε (epsilon)'))
             
             self.fields['symbol'].widget = forms.Select(
                 choices=symbol_choices,
                 attrs={'class': select_classes}
             )
+
+# Legacy forms for backward compatibility
+class DFATransitionForm(TransitionForm):
+    pass
+
+class NFATransitionForm(TransitionForm):
+    pass
 
 class MultipleSymbolForm(forms.Form):
     """Form for selecting multiple symbols for NFA transitions."""

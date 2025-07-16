@@ -9,43 +9,29 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 
-from .models import DFA, NFA, DFAState, NFAState, DFATransition, NFATransition, UserHistory
-from .forms import DFACreateForm, NFACreateForm
+from .models import Automaton, State, Transition, UserHistory
 
 # --- Helper Function ---
 def get_automaton_instance(pk, user):
-    """Fetches the correct DFA or NFA instance, ensuring ownership or system access."""
+    """Fetches the automaton instance, ensuring ownership or system access."""
     try:
         # Try to get user's own automaton first
-        return DFA.objects.get(pk=pk, owner=user)
-    except DFA.DoesNotExist:
+        return Automaton.objects.get(pk=pk, owner=user)
+    except Automaton.DoesNotExist:
+        # Try to get system examples (owner=None or system user)
         try:
-            return NFA.objects.get(pk=pk, owner=user)
-        except NFA.DoesNotExist:
-            # Try to get system examples (owner=None or system user)
+            return Automaton.objects.get(pk=pk, owner=None)
+        except Automaton.DoesNotExist:
+            # Try system user examples
             try:
-                return DFA.objects.get(pk=pk, owner=None)
-            except DFA.DoesNotExist:
-                try:
-                    return NFA.objects.get(pk=pk, owner=None)
-                except NFA.DoesNotExist:
-                    # Try system user examples
-                    try:
-                        system_user = User.objects.get(username='system')
-                        try:
-                            return DFA.objects.get(pk=pk, owner=system_user)
-                        except DFA.DoesNotExist:
-                            return NFA.objects.get(pk=pk, owner=system_user)
-                    except (User.DoesNotExist, DFA.DoesNotExist, NFA.DoesNotExist):
-                        raise Http404("No Automaton found matching the query or you don't have permission.")
+                system_user = User.objects.get(username='system')
+                return Automaton.objects.get(pk=pk, owner=system_user)
+            except (User.DoesNotExist, Automaton.DoesNotExist):
+                raise Http404("No Automaton found matching the query or you don't have permission.")
 
 def get_automaton_related_models(automaton):
-    """Gets the concrete State and Transition models for a given automaton instance."""
-    if isinstance(automaton, DFA):
-        return DFAState, DFATransition
-    elif isinstance(automaton, NFA):
-        return NFAState, NFATransition
-    raise Http404("Automaton type not found")
+    """Gets the State and Transition models for a given automaton instance."""
+    return State, Transition
 
 # --- Class-Based Views for Pages ---
 class DashboardView(LoginRequiredMixin, ListView):
@@ -54,26 +40,26 @@ class DashboardView(LoginRequiredMixin, ListView):
 
     def get_queryset(self):
         # Get user's own automata
-        user_dfas = DFA.objects.filter(owner=self.request.user)
-        user_nfas = NFA.objects.filter(owner=self.request.user)
+        user_automatons = Automaton.objects.filter(owner=self.request.user)
         
         # Get system examples (examples for everyone)
-        system_dfas = DFA.objects.filter(owner=None)
-        system_nfas = NFA.objects.filter(owner=None)
+        system_automatons = Automaton.objects.filter(owner=None)
         
         # Try to get examples from system user if exists
         try:
             system_user = User.objects.get(username='system')
-            system_dfas = system_dfas.union(DFA.objects.filter(owner=system_user))
-            system_nfas = system_nfas.union(NFA.objects.filter(owner=system_user))
+            system_automatons = system_automatons.union(Automaton.objects.filter(owner=system_user))
         except User.DoesNotExist:
             pass
         
         # Combine user's automata with system examples
-        all_dfas = user_dfas.union(system_dfas)
-        all_nfas = user_nfas.union(system_nfas)
+        all_automatons = user_automatons.union(system_automatons)
         
-        return {'dfas': all_dfas, 'nfas': all_nfas}
+        # Separate by type
+        dfas = [a for a in all_automatons if a.get_type() == 'DFA']
+        nfas = [a for a in all_automatons if a.get_type() == 'NFA']
+        
+        return {'dfas': dfas, 'nfas': nfas}
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -86,6 +72,7 @@ class DashboardView(LoginRequiredMixin, ListView):
         context['recent_history'] = recent_history
         
         # Add statistics
+        user_automatons = Automaton.objects.filter(owner=self.request.user)
         context['stats'] = {
             'total_created': UserHistory.objects.filter(
                 user=self.request.user, 
@@ -95,8 +82,8 @@ class DashboardView(LoginRequiredMixin, ListView):
                 user=self.request.user, 
                 action='simulate'
             ).count(),
-            'dfas_count': DFA.objects.filter(owner=self.request.user).count(),
-            'nfas_count': NFA.objects.filter(owner=self.request.user).count(),
+            'dfas_count': len([a for a in user_automatons if a.get_type() == 'DFA']),
+            'nfas_count': len([a for a in user_automatons if a.get_type() == 'NFA']),
         }
         
         return context
@@ -108,8 +95,9 @@ class ExercisesListView(ListView):
     def get_queryset(self):
         try:
             system_user = User.objects.get(username='system')
-            dfas = DFA.objects.filter(owner=system_user)
-            nfas = NFA.objects.filter(owner=system_user)
+            automatons = Automaton.objects.filter(owner=system_user)
+            dfas = [a for a in automatons if a.get_type() == 'DFA']
+            nfas = [a for a in automatons if a.get_type() == 'NFA']
             return {'dfas': dfas, 'nfas': nfas}
         except User.DoesNotExist:
             return {'dfas': [], 'nfas': []}
@@ -131,16 +119,18 @@ class AutomatonDetailView(LoginRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         automaton = self.get_object()
-        context['is_nfa'] = isinstance(automaton, NFA)
-        context['is_dfa'] = isinstance(automaton, DFA)
+        automaton_type = automaton.get_type()
+        context['is_nfa'] = automaton_type == 'NFA'
+        context['is_dfa'] = automaton_type == 'DFA'
         
         # Removed view logging for better UX
         
         # Add FA type check
-        fa_type, is_valid, message = automaton.check_fa_type()
-        context['fa_type'] = fa_type
-        context['fa_type_valid'] = is_valid
-        context['fa_type_message'] = message
+        context['fa_type'] = automaton_type
+        is_dfa_valid, dfa_message = automaton.is_dfa()
+        is_nfa_valid, nfa_message = automaton.is_nfa()
+        context['fa_type_valid'] = is_dfa_valid or is_nfa_valid
+        context['fa_type_message'] = dfa_message if is_dfa_valid else nfa_message
         
         # Add a simple filter for use in templates
         from django.template.defaultfilters import register
@@ -150,55 +140,32 @@ class AutomatonDetailView(LoginRequiredMixin, DetailView):
         context['class_name_filter'] = class_name
         return context
 
-class DFACreateView(LoginRequiredMixin, CreateView):
-    model = DFA
-    form_class = DFACreateForm
-    template_name = 'automaton/create_dfa.html'
+class AutomatonCreateView(LoginRequiredMixin, CreateView):
+    model = Automaton
+    template_name = 'automaton/create_automaton.html'
+    fields = ['name', 'alphabet']
 
     def form_valid(self, form):
-        # Create the DFA immediately and redirect to editing
-        dfa = form.save(commit=False)
-        dfa.owner = self.request.user
-        dfa.is_example = False
-        dfa.save()
+        # Create the automaton immediately and redirect to editing
+        automaton = form.save(commit=False)
+        automaton.owner = self.request.user
+        automaton.is_example = False
+        automaton.has_epsilon = self.request.POST.get('has_epsilon') == 'on'
+        automaton.save()
         
         # Log creation action
         UserHistory.log_action(
             user=self.request.user,
-            automaton=dfa,
+            automaton=automaton,
             action='create',
-            details={'automaton_type': 'DFA'}
+            details={'automaton_type': 'Automaton', 'has_epsilon': automaton.has_epsilon}
         )
         
-        return redirect('core:automaton_detail', pk=dfa.pk)
+        return redirect('core:automaton_detail', pk=automaton.pk)
 
     def get_success_url(self):
         return reverse_lazy('core:automaton_detail', kwargs={'pk': self.object.pk})
 
-class NFACreateView(LoginRequiredMixin, CreateView):
-    model = NFA
-    form_class = NFACreateForm
-    template_name = 'automaton/create_nfa.html'
-
-    def form_valid(self, form):
-        # Create the NFA immediately and redirect to editing
-        nfa = form.save(commit=False)
-        nfa.owner = self.request.user
-        nfa.is_example = False
-        nfa.save()
-        
-        # Log creation action
-        UserHistory.log_action(
-            user=self.request.user,
-            automaton=nfa,
-            action='create',
-            details={'automaton_type': 'NFA'}
-        )
-        
-        return redirect('core:automaton_detail', pk=nfa.pk)
-
-    def get_success_url(self):
-        return reverse_lazy('core:automaton_detail', kwargs={'pk': self.object.pk})
 
 class AutomatonUpdateView(LoginRequiredMixin, UpdateView):
     template_name = 'automaton/automaton_form.html'
@@ -208,7 +175,12 @@ class AutomatonUpdateView(LoginRequiredMixin, UpdateView):
         return get_automaton_instance(self.kwargs.get('pk'), self.request.user)
 
     def get_form_class(self):
-        return DFACreateForm if isinstance(self.object, DFA) else NFACreateForm
+        from django import forms
+        class AutomatonForm(forms.ModelForm):
+            class Meta:
+                model = Automaton
+                fields = ['name', 'alphabet']
+        return AutomatonForm
 
     def get_success_url(self):
         return reverse_lazy('core:automaton_detail', kwargs={'pk': self.object.pk})
@@ -221,33 +193,6 @@ class AutomatonDeleteView(LoginRequiredMixin, DeleteView):
     def get_object(self, queryset=None):
         return get_automaton_instance(self.kwargs.get('pk'), self.request.user)
 
-class DFADetailView(LoginRequiredMixin, DetailView):
-    model = DFA
-    template_name = 'automaton/automaton_detail.html'
-    context_object_name = 'automaton'
-
-    def get_queryset(self):
-        return DFA.objects.filter(owner=self.request.user) | DFA.objects.filter(owner__username='system')
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['is_nfa'] = False
-        context['is_dfa'] = True
-        return context
-
-class NFADetailView(LoginRequiredMixin, DetailView):
-    model = NFA
-    template_name = 'automaton/automaton_detail.html'
-    context_object_name = 'automaton'
-
-    def get_queryset(self):
-        return NFA.objects.filter(owner=self.request.user) | NFA.objects.filter(owner__username='system')
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['is_nfa'] = True
-        context['is_dfa'] = False
-        return context
 
 # --- API-like Function-Based Views for AJAX calls ---
 
@@ -387,13 +332,13 @@ def add_transition(request, pk):
         symbol = data.get('symbol')
 
         # Handle empty symbol as epsilon for NFA
-        if not symbol and isinstance(automaton, NFA):
+        if not symbol and automaton.get_type() == 'NFA':
             symbol = 'ε'
         elif not symbol:
             return JsonResponse({'status': 'error', 'message': 'Symbol cannot be empty.'}, status=400)
 
         # For NFA, allow epsilon transitions
-        if isinstance(automaton, NFA):
+        if automaton.get_type() == 'NFA':
             if symbol == 'ε' or symbol == '':
                 # Epsilon transition is always valid for NFA
                 pass
@@ -413,7 +358,7 @@ def add_transition(request, pk):
                 return JsonResponse({'status': 'error', 'message': f"Symbol '{symbol}' is not in the alphabet."}, status=400)
 
         # For DFAs, ensure no two transitions from the same state have the same symbol
-        if isinstance(automaton, DFA):
+        if automaton.get_type() == 'DFA':
             existing_transitions = TransitionModel.objects.filter(
                 automaton=automaton, 
                 from_state=from_state
@@ -488,8 +433,8 @@ def get_alphabet_symbols(request, pk):
     automaton = get_automaton_instance(pk, request.user)
     alphabet = list(automaton.get_alphabet_as_set())
     
-    # For NFA, add epsilon option
-    if isinstance(automaton, NFA):
+    # If has_epsilon is True, always include epsilon option
+    if automaton.has_epsilon:
         symbols = [{'value': 'ε', 'label': 'ε (epsilon)'}]
         symbols.extend([{'value': symbol, 'label': symbol} for symbol in sorted(alphabet)])
     else:
@@ -501,17 +446,17 @@ def get_alphabet_symbols(request, pk):
 @login_required
 def convert_nfa_to_dfa(request, pk):
     try:
-        nfa = get_object_or_404(NFA, pk=pk)
-        # Allow owner or system examples
-        if nfa.owner != request.user and nfa.owner.username != 'system':
-            return JsonResponse({'status': 'error', 'message': 'Permission denied.'}, status=403)
+        automaton = get_automaton_instance(pk, request.user)
         
-        dfa = nfa.to_dfa()
+        if automaton.get_type() != 'NFA':
+            return JsonResponse({'status': 'error', 'message': 'Only NFA can be converted to DFA.'}, status=400)
+        
+        dfa = automaton.to_dfa()
         
         # Log conversion action
         UserHistory.log_action(
             user=request.user,
-            automaton=nfa,
+            automaton=automaton,
             action='convert',
             details={
                 'from_type': 'NFA',
@@ -533,27 +478,27 @@ def convert_nfa_to_dfa(request, pk):
 @login_required
 def minimize_dfa(request, pk):
     try:
-        dfa = get_object_or_404(DFA, pk=pk)
-        # Allow owner or system examples
-        if dfa.owner != request.user and dfa.owner.username != 'system':
-            return JsonResponse({'status': 'error', 'message': 'Permission denied.'}, status=403)
+        automaton = get_automaton_instance(pk, request.user)
         
-        minimized_dfa = dfa.minimize()
+        if automaton.get_type() != 'DFA':
+            return JsonResponse({'status': 'error', 'message': 'Only DFA can be minimized.'}, status=400)
+        
+        minimized_dfa = automaton.minimize()
         
         # Log minimization action
         UserHistory.log_action(
             user=request.user,
-            automaton=dfa,
+            automaton=automaton,
             action='minimize',
             details={
-                'original_states': dfa.states.count(),
+                'original_states': automaton.states.count(),
                 'minimized_states': minimized_dfa.states.count(),
-                'was_already_minimal': minimized_dfa == dfa,
-                'result_dfa_id': minimized_dfa.id if minimized_dfa != dfa else dfa.id
+                'was_already_minimal': minimized_dfa == automaton,
+                'result_dfa_id': minimized_dfa.id if minimized_dfa != automaton else automaton.id
             }
         )
         
-        if minimized_dfa == dfa:
+        if minimized_dfa == automaton:
             return JsonResponse({
                 'status': 'info',
                 'message': 'DFA is already minimal.'
@@ -570,19 +515,65 @@ def minimize_dfa(request, pk):
 
 @login_required
 def check_if_nfa_is_dfa(request, pk):
-    nfa = get_object_or_404(NFA, pk=pk, owner=request.user)
-    is_dfa, message = nfa.is_dfa()
+    automaton = get_automaton_instance(pk, request.user)
+    is_dfa, message = automaton.is_dfa()
     return JsonResponse({'is_dfa': is_dfa, 'message': message})
 
 @login_required
 def check_fa_type(request, pk):
     """Generic FA type checker for any automaton."""
     automaton = get_automaton_instance(pk, request.user)
-    fa_type, is_valid, message = automaton.check_fa_type()
+    fa_type = automaton.get_type()
+    is_dfa_valid, dfa_message = automaton.is_dfa()
+    is_nfa_valid, nfa_message = automaton.is_nfa()
     
     return JsonResponse({
         'fa_type': fa_type,
-        'is_valid': is_valid,
-        'message': message,
-        'current_type': 'DFA' if isinstance(automaton, DFA) else 'NFA'
+        'is_valid': is_dfa_valid or is_nfa_valid,
+        'message': dfa_message if is_dfa_valid else nfa_message,
+        'current_type': fa_type
     })
+
+class FATypeCheckerView(LoginRequiredMixin, ListView):
+    template_name = 'automaton/fa_type_checker.html'
+    context_object_name = 'automatons'
+    
+    def get_queryset(self):
+        user_automatons = Automaton.objects.filter(owner=self.request.user)
+        system_automatons = Automaton.objects.filter(owner=None)
+        
+        try:
+            system_user = User.objects.get(username='system')
+            system_automatons = system_automatons.union(Automaton.objects.filter(owner=system_user))
+        except User.DoesNotExist:
+            pass
+        
+        return user_automatons.union(system_automatons)
+
+class ConversionToolsView(LoginRequiredMixin, ListView):
+    template_name = 'automaton/conversion_tools.html'
+    context_object_name = 'automatons'
+    
+    def get_queryset(self):
+        user_automatons = Automaton.objects.filter(owner=self.request.user)
+        system_automatons = Automaton.objects.filter(owner=None)
+        
+        try:
+            system_user = User.objects.get(username='system')
+            system_automatons = system_automatons.union(Automaton.objects.filter(owner=system_user))
+        except User.DoesNotExist:
+            pass
+        
+        all_automatons = user_automatons.union(system_automatons)
+        
+        dfas = [a for a in all_automatons if a.get_type() == 'DFA']
+        nfas = [a for a in all_automatons if a.get_type() == 'NFA']
+        
+        return {'dfas': dfas, 'nfas': nfas}
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        automatons = self.get_queryset()
+        context['dfas'] = automatons['dfas']
+        context['nfas'] = automatons['nfas']
+        return context

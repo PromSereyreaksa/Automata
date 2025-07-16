@@ -23,22 +23,22 @@ The project uses PostgreSQL (Supabase). Database credentials are in `automata/se
 ## Architecture
 
 ### Core Models (`core/models.py`)
-- **Automaton**: Abstract base class for DFA and NFA with generic FA type checking
-- **DFA**: Deterministic Finite Automaton with validation and minimization
-- **NFA**: Nondeterministic Finite Automaton with epsilon transitions and DFA conversion
-- **State/Transition**: Abstract models with concrete DFAState/NFAState and DFATransition/NFATransition
+- **Automaton**: Single unified class for all finite automata with automatic type detection
+- **State**: Represents states in an automaton (start, final, or regular)
+- **Transition**: Represents transitions between states with symbol support
 - **UserHistory**: Tracks all user interactions (create, view, simulate, minimize, convert)
 
 ### Key Features
 - **Interactive visualization**: Uses Cytoscape.js for graph rendering with zoom constraints
 - **String simulation**: Test input strings against automata with visual path highlighting
-- **DFA minimization**: Table-filling algorithm implementation
-- **NFA to DFA conversion**: Subset construction algorithm
+- **DFA minimization**: Table-filling algorithm implementation (only for DFA)
+- **NFA to DFA conversion**: Subset construction algorithm (only for NFA)
 - **Real-time editing**: Dynamic state/transition management with auto-saving
 - **Optimized user tracking**: Selective activity history and analytics dashboard
-- **Generic FA checker**: Automatically detects DFA/NFA/Invalid automata types
+- **Automatic type detection**: `is_dfa()` and `is_nfa()` methods determine automaton type
 - **Enhanced state management**: Range transitions, multi-symbol inputs, and batch operations
 - **User-specific storage**: All automata saved to individual user accounts with auto-save
+- **DFA single final state**: Fixed to enforce exactly one final state for DFA
 
 ### Frontend Structure
 - **Tailwind CSS**: Styling framework configured in `theme/` app
@@ -53,11 +53,9 @@ The project uses PostgreSQL (Supabase). Database credentials are in `automata/se
 - `/accounts/register/` - User registration page
 - `/accounts/logout/` - Proper logout functionality
 - `/automata/` - Dashboard with user statistics and optimized activity history
-- `/automata/create/dfa/` - Create new DFA (direct creation)
-- `/automata/create/nfa/` - Create new NFA (direct creation)
-- `/automata/dfa/<id>/` - DFA detail view with real-time editing
-- `/automata/nfa/<id>/` - NFA detail view with real-time editing
-- `/automata/api/automaton/<id>/check-fa-type/` - Generic FA type checker
+- `/automata/create/` - Create new automaton (unified creation)
+- `/automata/<id>/` - Automaton detail view with real-time editing
+- `/automata/api/automaton/<id>/check-type/` - Automatic type detection
 - `/automata/api/...` - AJAX endpoints for real-time operations with auto-save
 
 ### Testing
@@ -71,14 +69,16 @@ The project uses PostgreSQL (Supabase). Database credentials are in `automata/se
 
 ## Development Notes
 
-- Models use abstract base classes with concrete implementations for DFA/NFA
+- Single unified Automaton model with automatic type detection
 - JSON representation field stores graph data for visualization
-- Epsilon transitions supported in NFAs (symbol='ε' or empty string)
+- Epsilon transitions supported (symbol='ε' or empty string)
 - Enhanced transition support: ranges (a-z, 0-9, A-Z) and multi-symbol inputs (a,b,c)
 - State and transition validation ensures automata correctness
 - Owner field supports both user-owned and system example automata
 - UserHistory model tracks all user actions with detailed context
-- Generic FA checker works on any automaton type, detecting DFA/NFA/Invalid states
+- `is_dfa()` and `is_nfa()` methods automatically determine automaton type
+- DFA validation now enforces exactly one final state
+- NFA to DFA conversion and DFA minimization work on single model
 
 ## New Features Added
 
@@ -96,25 +96,30 @@ The project uses PostgreSQL (Supabase). Database credentials are in `automata/se
 - **Real-time updates**: No page refresh when adding/editing states and transitions
 - **Auto-saving**: All changes persist immediately
 
-### Generic FA Type Detection
-- `check_fa_type()` method works on any automaton instance
-- Automatically detects if automaton is DFA, NFA, or Invalid
-- Identifies specific issues: epsilon transitions, multiple start states, nondeterminism
-- Visual indicators in UI showing detected type vs. declared type
+### Automatic Type Detection
+- `is_dfa()` method checks if automaton is valid DFA (exactly one start state, exactly one final state, no epsilon transitions, deterministic)
+- `is_nfa()` method checks if automaton is valid NFA (at least one start state, at least one final state, valid transitions)
+- `get_type()` method returns 'DFA', 'NFA', or 'INVALID' based on validation
+- Visual indicators in UI showing detected type
+- Operations like minimize() and to_dfa() check type before execution
 
-### Improved Creation Flow
-- Direct creation process: Create → Edit immediately (no preview step)
+### Unified Creation Flow
+- Single creation process: Create automaton → Type determined automatically
 - Better input field visibility with white background and dark text
 - Automatons created directly and redirect to editing interface
 - No confirmation step - save happens during editing instead of before
 - Clear create/cancel buttons with descriptive actions
 - **Auto-saving**: All changes save automatically without user intervention
+- Type detection happens in real-time based on structure
 
-### DFA Implementation Fixes
+### Implementation Improvements
 - Fixed DFA minimization algorithm to use `matches_symbol()` method instead of direct symbol comparison
 - Improved transition lookup in both simulation and minimization to handle complex symbol patterns
 - Fixed NFA to DFA conversion to properly handle start state validation
 - Enhanced error handling in transition validation and creation
+- **Fixed DFA final state validation**: Now enforces exactly one final state
+- **Unified model**: Single Automaton class replaces separate DFA/NFA classes
+- **Type-safe operations**: minimize() only works on DFA, to_dfa() only works on NFA
 
 ### Enhanced User Experience (UX)
 - **No more page refreshes**: Real-time updates maintain zoom level and graph position
@@ -133,7 +138,8 @@ The project uses PostgreSQL (Supabase). Database credentials are in `automata/se
 - **Session management**: Proper redirects after login/logout
 
 ### API Endpoints
-- `/api/automaton/<id>/check-fa-type/` - Generic FA type checker
+- `/api/automaton/<id>/check-type/` - Automatic type detection
 - Optimized logging in all existing endpoints (reduced unnecessary logging)
 - `/api/automaton/<id>/add-state/` - Supports multiple state names separated by commas
 - Real-time auto-saving on all edit endpoints
+- Updated endpoints to work with unified Automaton model

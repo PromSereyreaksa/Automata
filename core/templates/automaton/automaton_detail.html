@@ -2,6 +2,33 @@
 
 {% block title %}{{ automaton.name }} - Details{% endblock %}
 
+{% block extra_css %}
+<style>
+    .tab-pane {
+        background: white !important;
+        color: #1f2937 !important;
+        padding: 20px;
+    }
+    
+    .tab-content {
+        background: white !important;
+    }
+    
+    .nav-tabs .nav-link {
+        color: #1f2937 !important;
+    }
+    
+    .nav-tabs .nav-link.active {
+        color: #1e3a8a !important;
+        background-color: white !important;
+    }
+    
+    .card-header h5 {
+        color: #1f2937 !important;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="containe    // URLs
     const getJsonUrl = `{% url 'core:get_automaton_json' automaton.pk %}`;
@@ -44,12 +71,114 @@
         <div class="col-lg-8">
             <div class="card">
                 <div class="card-header">
-                    <h5 class="card-title mb-0">
-                        <i class="fas fa-project-diagram me-2"></i>Automaton Visualization
-                    </h5>
+                    <ul class="nav nav-tabs card-header-tabs" role="tablist">
+                        <li class="nav-item">
+                            <a class="nav-link active" id="visualization-tab" data-bs-toggle="tab" href="#visualization" role="tab">
+                                <i class="fas fa-project-diagram me-2"></i>Visualization
+                            </a>
+                        </li>
+                        {% if fa_type == 'NFA' %}
+                        <li class="nav-item">
+                            <a class="nav-link" id="nfa-to-dfa-tab" data-bs-toggle="tab" href="#nfa-to-dfa" role="tab">
+                                <i class="fas fa-exchange-alt me-2"></i>Convert to DFA
+                            </a>
+                        </li>
+                        {% endif %}
+                        {% if fa_type == 'DFA' %}
+                        <li class="nav-item">
+                            <a class="nav-link" id="minimize-dfa-tab" data-bs-toggle="tab" href="#minimize-dfa" role="tab">
+                                <i class="fas fa-compress-alt me-2"></i>Minimize
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
                 </div>
                 <div class="card-body p-0">
-                    <div id="cy" style="height: 600px; width: 100%;"></div>
+                    <div class="tab-content">
+                        <div class="tab-pane fade show active" id="visualization" role="tabpanel">
+                            <div id="cy" style="height: 600px; width: 100%;"></div>
+                        </div>
+                        {% if fa_type == 'NFA' %}
+                        <div class="tab-pane fade" id="nfa-to-dfa" role="tabpanel">
+                            <div class="p-4">
+                                <h5 class="mb-4">Convert NFA to DFA</h5>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <h6 class="mb-0">Original NFA</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <p><strong>States:</strong> {{ automaton.states.count }}</p>
+                                                <p><strong>Transitions:</strong> {{ automaton.transitions.count }}</p>
+                                                <p><strong>Alphabet:</strong> {{ automaton.alphabet }}</p>
+                                                <button id="convert-nfa-btn" class="btn btn-primary">
+                                                    <i class="fas fa-exchange-alt me-2"></i>Convert to DFA
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <h6 class="mb-0">Conversion Steps</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div id="conversion-steps"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id="conversion-result" class="mt-4 d-none">
+                                    <div class="alert alert-success">
+                                        <h6><i class="fas fa-check-circle me-2"></i>Conversion Complete!</h6>
+                                        <p class="mb-0">The equivalent DFA has been created. <a href="#" id="view-dfa-link">View the DFA</a></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if fa_type == 'DFA' %}
+                        <div class="tab-pane fade" id="minimize-dfa" role="tabpanel">
+                            <div class="p-4">
+                                <h5 class="mb-4">Minimize DFA</h5>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <h6 class="mb-0">Original DFA</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <p><strong>States:</strong> {{ automaton.states.count }}</p>
+                                                <p><strong>Transitions:</strong> {{ automaton.transitions.count }}</p>
+                                                <p><strong>Alphabet:</strong> {{ automaton.alphabet }}</p>
+                                                <button id="minimize-dfa-btn" class="btn btn-primary">
+                                                    <i class="fas fa-compress-alt me-2"></i>Minimize DFA
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <h6 class="mb-0">Minimization Steps</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div id="minimization-steps"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id="minimization-result" class="mt-4 d-none">
+                                    <div class="alert alert-success">
+                                        <h6><i class="fas fa-check-circle me-2"></i>Minimization Complete!</h6>
+                                        <p class="mb-0">The minimized DFA has been created. <a href="#" id="view-minimized-link">View the minimized DFA</a></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
         </div>
@@ -155,6 +284,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const addTransitionUrl = `{% url 'core:add_transition' automaton.pk %}`;
     const deleteTransitionUrl = `{% url 'core:delete_transition' automaton.pk %}`;
     const simulateUrl = `{% url 'core:simulate_string' automaton.pk %}`;
+    const convertNfaToDfaUrl = `{% url 'core:convert_nfa_to_dfa' automaton.pk %}`;
+    const minimizeDfaUrl = `{% url 'core:minimize_dfa' automaton.pk %}`;
+    const checkFaTypeUrl = `{% url 'core:check_fa_type' automaton.pk %}`;
 
     // DOM Elements
     const globalErrorDiv = document.getElementById('global-error');
@@ -202,6 +334,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             },
             {
+                selector: 'edge[?is_self_loop]',
+                style: {
+                    'curve-style': 'loop',
+                    'loop-direction': '0deg',
+                    'loop-sweep': '45deg',
+                    'control-point-distance': 50,
+                    'control-point-weight': 0.5
+                }
+            },
+            {
                 selector: 'node[?is_start]',
                 style: {
                     'border-width': 4,
@@ -225,13 +367,34 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             },
             {
-                selector: '.highlighted',
+                selector: '.current-state',
                 style: {
-                    'background-color': '#3b82f6',
-                    'border-color': '#1d4ed8',
+                    'background-color': '#fbbf24',
+                    'border-color': '#f59e0b',
+                    'color': '#1f2937',
+                    'border-width': 6,
+                    'width': 50,
+                    'height': 50,
+                    'transition-property': 'background-color, border-color, color, width, height',
+                    'transition-duration': '0.3s'
+                }
+            },
+            {
+                selector: '.visited-state',
+                style: {
+                    'background-color': '#9ca3af',
+                    'border-color': '#6b7280',
                     'color': '#ffffff',
                     'transition-property': 'background-color, border-color, color',
                     'transition-duration': '0.3s'
+                }
+            },
+            {
+                selector: '.final-position',
+                style: {
+                    'background-color': '#10b981',
+                    'border-color': '#059669',
+                    'color': '#ffffff'
                 }
             },
             {
@@ -239,7 +402,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 style: {
                     'line-color': '#3b82f6',
                     'target-arrow-color': '#3b82f6',
-                    'width': 3
+                    'width': 4,
+                    'transition-property': 'line-color, target-arrow-color, width',
+                    'transition-duration': '0.3s'
+                }
+            },
+            {
+                selector: '.loop-edge',
+                style: {
+                    'line-color': '#f59e0b',
+                    'target-arrow-color': '#f59e0b',
+                    'width': 5,
+                    'curve-style': 'loop',
+                    'loop-direction': '0deg',
+                    'loop-sweep': '45deg'
                 }
             }
         ],
@@ -479,22 +655,41 @@ document.addEventListener('DOMContentLoaded', function() {
             const result = await response.json();
 
             resultDiv.classList.remove('d-none');
-            cy.elements().removeClass('highlighted path-edge');
+            cy.elements().removeClass('highlighted path-edge current-state visited-state');
             
             if (result.path && result.path.length > 0) {
-                // Animate path
+                // Animate path with enhanced visualization
                 let i = 0;
                 const highlightNext = () => {
                     if (i < result.path.length) {
-                        cy.getElementById(result.path[i]).addClass('highlighted');
+                        // Remove previous current state
+                        cy.elements('.current-state').removeClass('current-state');
+                        
+                        // Add current state
+                        cy.getElementById(result.path[i]).addClass('current-state');
+                        
+                        // Mark all previous states as visited
+                        for (let j = 0; j < i; j++) {
+                            cy.getElementById(result.path[j]).addClass('visited-state');
+                        }
+                        
                         if (i > 0) {
                             // Highlight the edge between previous and current state
                             const prevState = result.path[i-1];
                             const currState = result.path[i];
-                            cy.edges(`[source="${prevState}"][target="${currState}"]`).addClass('path-edge');
+                            const edge = cy.edges(`[source="${prevState}"][target="${currState}"]`);
+                            edge.addClass('path-edge');
+                            
+                            // Add loop indicator if same state
+                            if (prevState === currState) {
+                                edge.addClass('loop-edge');
+                            }
                         }
                         i++;
-                        setTimeout(highlightNext, 800);
+                        setTimeout(highlightNext, 1000);
+                    } else {
+                        // Final state highlighting
+                        cy.elements('.current-state').addClass('final-position');
                     }
                 };
                 highlightNext();
@@ -555,6 +750,112 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
+
+    // --- NFA to DFA Conversion ---
+    const convertNfaBtn = document.getElementById('convert-nfa-btn');
+    if (convertNfaBtn) {
+        convertNfaBtn.addEventListener('click', async () => {
+            const stepsDiv = document.getElementById('conversion-steps');
+            const resultDiv = document.getElementById('conversion-result');
+            
+            stepsDiv.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Converting...';
+            convertNfaBtn.disabled = true;
+            
+            try {
+                const response = await fetch(convertNfaToDfaUrl, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': csrftoken }
+                });
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    stepsDiv.innerHTML = `
+                        <div class="alert alert-info">
+                            <h6>Subset Construction Algorithm:</h6>
+                            <ol>
+                                <li>Create initial state from ε-closure of NFA start states</li>
+                                <li>For each new state and alphabet symbol, compute transitions</li>
+                                <li>Create new DFA states from ε-closure of reachable states</li>
+                                <li>Repeat until no new states are generated</li>
+                            </ol>
+                        </div>
+                        <div class="alert alert-success">
+                            <strong>Result:</strong> DFA "${result.dfa_name}" created successfully!
+                        </div>
+                    `;
+                    resultDiv.classList.remove('d-none');
+                    document.getElementById('view-dfa-link').href = `/automaton/${result.dfa_id}/`;
+                } else {
+                    stepsDiv.innerHTML = `<div class="alert alert-danger">${result.message}</div>`;
+                }
+            } catch (error) {
+                stepsDiv.innerHTML = `<div class="alert alert-danger">Conversion failed: ${error.message}</div>`;
+            } finally {
+                convertNfaBtn.disabled = false;
+            }
+        });
+    }
+    
+    // --- DFA Minimization ---
+    const minimizeDfaBtn = document.getElementById('minimize-dfa-btn');
+    if (minimizeDfaBtn) {
+        minimizeDfaBtn.addEventListener('click', async () => {
+            const stepsDiv = document.getElementById('minimization-steps');
+            const resultDiv = document.getElementById('minimization-result');
+            
+            stepsDiv.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Minimizing...';
+            minimizeDfaBtn.disabled = true;
+            
+            try {
+                const response = await fetch(minimizeDfaUrl, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': csrftoken }
+                });
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    stepsDiv.innerHTML = `
+                        <div class="alert alert-info">
+                            <h6>Table-Filling Algorithm:</h6>
+                            <ol>
+                                <li>Create table for all pairs of states</li>
+                                <li>Mark pairs where one is final and one is not</li>
+                                <li>Iteratively mark distinguishable pairs</li>
+                                <li>Group equivalent states and create minimized DFA</li>
+                            </ol>
+                        </div>
+                        <div class="alert alert-success">
+                            <strong>Result:</strong> Minimized DFA "${result.minimized_dfa_name}" created successfully!
+                        </div>
+                    `;
+                    resultDiv.classList.remove('d-none');
+                    document.getElementById('view-minimized-link').href = `/automaton/${result.minimized_dfa_id}/`;
+                } else if (result.status === 'info') {
+                    stepsDiv.innerHTML = `
+                        <div class="alert alert-info">
+                            <h6>Table-Filling Algorithm:</h6>
+                            <ol>
+                                <li>Create table for all pairs of states</li>
+                                <li>Mark pairs where one is final and one is not</li>
+                                <li>Iteratively mark distinguishable pairs</li>
+                                <li>Group equivalent states and create minimized DFA</li>
+                            </ol>
+                        </div>
+                        <div class="alert alert-info">
+                            <strong>Result:</strong> ${result.message}
+                        </div>
+                    `;
+                } else {
+                    stepsDiv.innerHTML = `<div class="alert alert-danger">${result.message}</div>`;
+                }
+            } catch (error) {
+                stepsDiv.innerHTML = `<div class="alert alert-danger">Minimization failed: ${error.message}</div>`;
+            } finally {
+                minimizeDfaBtn.disabled = false;
+            }
+        });
+    }
+
 
     // --- Initial Load ---
     refreshAutomatonData();
