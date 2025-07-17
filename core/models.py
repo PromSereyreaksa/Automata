@@ -271,31 +271,64 @@ class Automaton(models.Model):
     def to_dfa(self):
         """
         Converts the NFA to an equivalent DFA using the subset construction algorithm.
+        Returns a tuple: (dfa, detailed_steps)
         """
         if self.get_type() != 'NFA':
             raise ValueError("Can only convert NFA to DFA")
         
-        from collections import defaultdict
+        from collections import defaultdict, deque
         
-        # Get epsilon closure for start states
+        steps = []
+        state_construction_log = []
+        
+        # Helper function to compute epsilon closure
         def epsilon_closure(states):
+            """
+            Calculates the epsilon closure for a set of states.
+            Returns the set of all states reachable by epsilon transitions.
+            """
+            if not states:
+                return set()
+            
             closure = set(states)
             stack = list(states)
+            
             while stack:
                 state = stack.pop()
+                # Find all epsilon transitions from this state
                 for trans in self.transitions.filter(from_state=state):
                     if trans.matches_symbol('ε') or not trans.symbol:
                         if trans.to_state not in closure:
                             closure.add(trans.to_state)
                             stack.append(trans.to_state)
+            
             return closure
         
-        # Get all start states and their epsilon closure
+        # Step 1: Get NFA transition table
+        alphabet = self.get_alphabet_as_set()
+        steps.append({
+            "step": 1,
+            "description": "NFA Transition Table Analysis",
+            "nfa_table": self._create_transition_table(self),
+            "alphabet": sorted(alphabet),
+            "explanation": "Analyze the original NFA structure and alphabet"
+        })
+        
+        # Step 2: Create the DFA's start state
         start_states = set(self.states.filter(is_start=True))
         if not start_states:
             raise ValueError("NFA must have at least one start state")
         
+        # Get epsilon closure of start states
         initial_state_set = epsilon_closure(start_states)
+        
+        steps.append({
+            "step": 2,
+            "description": "Create DFA start state",
+            "start_states": [s.name for s in start_states],
+            "epsilon_closure": sorted([s.name for s in initial_state_set]),
+            "explanation": "DFA start state is the ε-closure of NFA start states"
+        })
         
         # Create the DFA
         dfa = Automaton.objects.create(
@@ -307,12 +340,16 @@ class Automaton(models.Model):
         # Map from frozenset of NFA states to DFA state
         state_map = {}
         # Queue of state sets to process
-        queue = [initial_state_set]
+        queue = deque([initial_state_set])
         # Set of processed state sets
         processed = set()
         
+        # Better state naming
+        state_names = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z']
+        state_counter = 0
+        
         # Create initial DFA state
-        initial_state_name = "{" + ",".join(sorted(s.name for s in initial_state_set)) + "}"
+        initial_state_name = state_names[state_counter] if state_counter < len(state_names) else f"S{state_counter}"
         initial_dfa_state = dfa.states.create(
             name=initial_state_name,
             is_start=True,
@@ -320,8 +357,20 @@ class Automaton(models.Model):
         )
         state_map[frozenset(initial_state_set)] = initial_dfa_state
         
+        state_construction_log.append({
+            "dfa_state": initial_state_name,
+            "nfa_states": sorted([s.name for s in initial_state_set]),
+            "is_start": True,
+            "is_final": any(s.is_final for s in initial_state_set)
+        })
+        
+        state_counter += 1
+        
+        # Step 3: Create the DFA's transition table
+        transition_log = []
+        
         while queue:
-            current_state_set = queue.pop(0)
+            current_state_set = queue.popleft()
             current_state_set_frozen = frozenset(current_state_set)
             
             if current_state_set_frozen in processed:
@@ -331,30 +380,44 @@ class Automaton(models.Model):
             current_dfa_state = state_map[current_state_set_frozen]
             
             # For each symbol in alphabet
-            for symbol in self.get_alphabet_as_set():
+            for symbol in alphabet:
                 next_state_set = set()
                 
-                # Find all states reachable by this symbol
+                # Find all states reachable by this symbol from current state set
                 for nfa_state in current_state_set:
                     for trans in self.transitions.filter(from_state=nfa_state):
                         if trans.matches_symbol(symbol):
                             next_state_set.add(trans.to_state)
                 
                 if next_state_set:
-                    # Add epsilon closure
+                    # Step 3 continued: Add epsilon closure of the destination states
                     next_state_set = epsilon_closure(next_state_set)
                     next_state_set_frozen = frozenset(next_state_set)
                     
                     # Create new DFA state if it doesn't exist
                     if next_state_set_frozen not in state_map:
-                        next_state_name = "{" + ",".join(sorted(s.name for s in next_state_set)) + "}"
+                        next_state_name = state_names[state_counter] if state_counter < len(state_names) else f"S{state_counter}"
+                        
+                        # Step 4: Create DFA final states
+                        # A DFA state is final if it contains at least one NFA final state
+                        is_final = any(s.is_final for s in next_state_set)
+                        
                         next_dfa_state = dfa.states.create(
                             name=next_state_name,
                             is_start=False,
-                            is_final=any(s.is_final for s in next_state_set)
+                            is_final=is_final
                         )
                         state_map[next_state_set_frozen] = next_dfa_state
                         queue.append(next_state_set)
+                        
+                        state_construction_log.append({
+                            "dfa_state": next_state_name,
+                            "nfa_states": sorted([s.name for s in next_state_set]),
+                            "is_start": False,
+                            "is_final": is_final
+                        })
+                        
+                        state_counter += 1
                     
                     # Create transition in DFA
                     dfa.transitions.create(
@@ -362,14 +425,87 @@ class Automaton(models.Model):
                         to_state=state_map[next_state_set_frozen],
                         symbol=symbol
                     )
+                    
+                    transition_log.append({
+                        "from_state": current_dfa_state.name,
+                        "to_state": state_map[next_state_set_frozen].name,
+                        "symbol": symbol,
+                        "nfa_computation": f"δ({[s.name for s in current_state_set]}, {symbol}) = ε-closure({[s.name for s in next_state_set]})"
+                    })
+        
+        steps.append({
+            "step": 3,
+            "description": "State Construction Process",
+            "state_construction": state_construction_log,
+            "explanation": "Each DFA state represents a set of NFA states"
+        })
+        
+        steps.append({
+            "step": 4,
+            "description": "Transition Construction",
+            "transitions": transition_log,
+            "explanation": "DFA transitions computed using ε-closure of NFA transitions"
+        })
+        
+        # Step 5: Remove unreachable states (already handled by our construction)
+        # Since we only create states that are reachable from the start state,
+        # unreachable states are automatically avoided
         
         # Update JSON representation
         dfa.update_json_representation()
-        return dfa
+        
+        # Create detailed result
+        detailed_steps = {
+            "steps": steps,
+            "message": f"Successfully converted NFA to DFA ({self.states.count()} NFA states → {dfa.states.count()} DFA states)",
+            "original_nfa_table": self._create_transition_table(self),
+            "final_dfa_table": self._create_transition_table(dfa),
+            "state_mapping": state_construction_log,
+            "nfa_state_count": self.states.count(),
+            "dfa_state_count": dfa.states.count(),
+            "has_epsilon_transitions": self.has_epsilon
+        }
+        
+        return dfa, detailed_steps
+    
+    def _remove_dead_states(self, dfa):
+        """
+        Helper method to remove dead states from DFA.
+        Dead states are states that cannot reach any final state.
+        """
+        # Find all states that can reach a final state
+        reachable_to_final = set()
+        final_states = set(dfa.states.filter(is_final=True))
+        
+        # Start with final states
+        reachable_to_final.update(final_states)
+        
+        # Work backwards to find all states that can reach final states
+        changed = True
+        while changed:
+            changed = False
+            for state in dfa.states.all():
+                if state not in reachable_to_final:
+                    # Check if this state has a path to any reachable state
+                    for trans in dfa.transitions.filter(from_state=state):
+                        if trans.to_state in reachable_to_final:
+                            reachable_to_final.add(state)
+                            changed = True
+                            break
+        
+        # Remove states that cannot reach final states
+        dead_states = []
+        for state in dfa.states.all():
+            if state not in reachable_to_final:
+                dead_states.append(state)
+        
+        for state in dead_states:
+            state.delete()
 
     def minimize(self):
         """
-        Minimizes the automaton if it's a DFA using the table-filling algorithm.
+        Minimizes the automaton if it's a DFA using the Myhill-Nerode Theorem.
+        Returns a tuple: (minimized_automaton, detailed_steps)
         """
         if self.get_type() != 'DFA':
             raise ValueError("Can only minimize DFA")
@@ -378,118 +514,187 @@ class Automaton(models.Model):
         n = len(states)
         
         if n <= 1:
-            return self  # Already minimal
+            return self, {"steps": [], "message": "Already minimal - single state"}
         
-        # Create a 2D table for distinguishable pairs
-        distinguishable = [[False for _ in range(n)] for _ in range(n)]
-        
-        # Step 1: Mark pairs where one is final and one is not
-        for i in range(n):
-            for j in range(i + 1, n):
-                if states[i].is_final != states[j].is_final:
-                    distinguishable[i][j] = True
-        
-        # Step 2: Iteratively mark distinguishable pairs
         alphabet = self.get_alphabet_as_set()
-        changed = True
+        steps = []
         
-        while changed:
-            changed = False
-            for i in range(n):
-                for j in range(i + 1, n):
-                    if not distinguishable[i][j]:
-                        # Check if this pair should be marked
+        # Step 1: Initial partition P0 - separate final and non-final states
+        final_states = []
+        non_final_states = []
+        
+        for state in states:
+            if state.is_final:
+                final_states.append(state)
+            else:
+                non_final_states.append(state)
+        
+        # Create initial partition P0
+        current_partition = []
+        if final_states:
+            current_partition.append(final_states)
+        if non_final_states:
+            current_partition.append(non_final_states)
+        
+        # Record Step 1
+        steps.append({
+            "step": 1,
+            "description": "Initial partition P₀: Separate final and non-final states",
+            "partition": [[state.name for state in group] for group in current_partition],
+            "explanation": "States are initially grouped by their acceptance status"
+        })
+        
+        # Step 2-4: Iteratively refine partitions
+        k = 0
+        while True:
+            k += 1
+            new_partition = []
+            
+            # For each set in current partition, check if it can be split
+            for state_set in current_partition:
+                if len(state_set) == 1:
+                    # Single state sets cannot be split
+                    new_partition.append(state_set)
+                    continue
+                
+                # Check all pairs in this set for distinguishability
+                sub_partitions = []
+                remaining_states = list(state_set)
+                
+                while remaining_states:
+                    # Start new sub-partition with first remaining state
+                    current_sub = [remaining_states.pop(0)]
+                    
+                    # Check which other states are equivalent to this one
+                    i = 0
+                    while i < len(remaining_states):
+                        state1 = current_sub[0]
+                        state2 = remaining_states[i]
+                        
+                        # Check if state1 and state2 are distinguishable
+                        are_distinguishable = False
+                        distinguishing_symbol = None
+                        
                         for symbol in alphabet:
-                            try:
-                                # Find transition that matches this symbol
-                                trans_i = None
-                                for trans in self.transitions.filter(from_state=states[i]):
-                                    if trans.matches_symbol(symbol):
-                                        trans_i = trans
-                                        break
-                                
-                                trans_j = None
-                                for trans in self.transitions.filter(from_state=states[j]):
-                                    if trans.matches_symbol(symbol):
-                                        trans_j = trans
-                                        break
-                                
-                                if not trans_i or not trans_j:
-                                    # If either transition doesn't exist, states are distinguishable
-                                    distinguishable[i][j] = True
-                                    changed = True
+                            # Find transitions for both states
+                            trans1 = None
+                            trans2 = None
+                            
+                            for trans in self.transitions.filter(from_state=state1):
+                                if trans.matches_symbol(symbol):
+                                    trans1 = trans
                                     break
-                                
-                                # Find indices of destination states
-                                dest_i_idx = states.index(trans_i.to_state)
-                                dest_j_idx = states.index(trans_j.to_state)
-                                
-                                # Check if destinations are distinguishable
-                                if dest_i_idx != dest_j_idx:
-                                    min_idx = min(dest_i_idx, dest_j_idx)
-                                    max_idx = max(dest_i_idx, dest_j_idx)
-                                    if distinguishable[min_idx][max_idx]:
-                                        distinguishable[i][j] = True
-                                        changed = True
-                                        break
-                            except:
-                                # If transition doesn't exist, states are distinguishable
-                                distinguishable[i][j] = True
-                                changed = True
+                            
+                            for trans in self.transitions.filter(from_state=state2):
+                                if trans.matches_symbol(symbol):
+                                    trans2 = trans
+                                    break
+                            
+                            if not trans1 or not trans2:
+                                # Missing transition means states are distinguishable
+                                are_distinguishable = True
+                                distinguishing_symbol = symbol
                                 break
-        
-        # Step 3: Group equivalent states
-        equivalence_classes = []
-        processed = [False] * n
-        
-        for i in range(n):
-            if not processed[i]:
-                equiv_class = [i]
-                processed[i] = True
+                            
+                            # Find which partition sets the destination states belong to
+                            dest1 = trans1.to_state
+                            dest2 = trans2.to_state
+                            
+                            # Find partition sets for destinations
+                            dest1_partition = None
+                            dest2_partition = None
+                            
+                            for j, partition_set in enumerate(current_partition):
+                                if dest1 in partition_set:
+                                    dest1_partition = j
+                                if dest2 in partition_set:
+                                    dest2_partition = j
+                            
+                            # If destinations are in different partitions, states are distinguishable
+                            if dest1_partition != dest2_partition:
+                                are_distinguishable = True
+                                distinguishing_symbol = symbol
+                                break
+                        
+                        if not are_distinguishable:
+                            # States are equivalent, add to current sub-partition
+                            current_sub.append(remaining_states.pop(i))
+                        else:
+                            i += 1
+                    
+                    sub_partitions.append(current_sub)
                 
-                for j in range(i + 1, n):
-                    if not processed[j] and not distinguishable[i][j]:
-                        equiv_class.append(j)
-                        processed[j] = True
+                # Add all sub-partitions to new partition
+                new_partition.extend(sub_partitions)
+            
+            # Record this step
+            steps.append({
+                "step": k + 1,
+                "description": f"Partition P₍{k}₎: Check distinguishability",
+                "partition": [[state.name for state in group] for group in new_partition],
+                "explanation": f"States are grouped by equivalent behavior on alphabet {list(alphabet)}"
+            })
+            
+            # Check if partition changed
+            if len(new_partition) == len(current_partition):
+                # Check if sets are the same
+                partition_changed = False
+                for new_set in new_partition:
+                    found_match = False
+                    for old_set in current_partition:
+                        if set(new_set) == set(old_set):
+                            found_match = True
+                            break
+                    if not found_match:
+                        partition_changed = True
+                        break
                 
-                equivalence_classes.append(equiv_class)
+                if not partition_changed:
+                    break  # No change, we're done
+            
+            current_partition = new_partition
         
-        # If no reduction possible, return original automaton
-        if len(equivalence_classes) == n:
-            return self
+        # Step 5: Check if minimization is possible
+        if len(current_partition) == n:
+            return self, {
+                "steps": steps,
+                "message": "Already minimal - no equivalent states found",
+                "equivalence_classes": [[state.name for state in group] for group in current_partition]
+            }
         
-        # Step 4: Create minimized automaton
+        # Create minimized automaton
         minimized_automaton = Automaton.objects.create(
             name=f"{self.name}_minimized",
             alphabet=self.alphabet,
             owner=self.owner
         )
         
-        # Create mapping from old states to new states
+        # Create mapping from old states to new states with better names
         state_map = {}
-        new_states = []
+        state_names = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z']
         
-        for i, equiv_class in enumerate(equivalence_classes):
-            # Create representative state name
-            repr_names = sorted([states[idx].name for idx in equiv_class])
-            new_state_name = "{" + ",".join(repr_names) + "}"
+        for i, equiv_class in enumerate(current_partition):
+            # Create clean state name
+            if i < len(state_names):
+                new_state_name = state_names[i]
+            else:
+                new_state_name = f"S{i}"
             
             # Check if any state in class is start/final
-            is_start = any(states[idx].is_start for idx in equiv_class)
-            is_final = any(states[idx].is_final for idx in equiv_class)
+            is_start = any(state.is_start for state in equiv_class)
+            is_final = any(state.is_final for state in equiv_class)
             
             new_state = minimized_automaton.states.create(
                 name=new_state_name,
                 is_start=is_start,
                 is_final=is_final
             )
-            new_states.append(new_state)
             
             # Map all old states in this class to the new state
-            for idx in equiv_class:
-                state_map[states[idx]] = new_state
+            for state in equiv_class:
+                state_map[state] = new_state
         
-        # Step 5: Create transitions for minimized automaton
+        # Create transitions for minimized automaton
         created_transitions = set()
         
         for old_state in states:
@@ -518,7 +723,45 @@ class Automaton(models.Model):
         
         # Update JSON representation
         minimized_automaton.update_json_representation()
-        return minimized_automaton
+        
+        # Create detailed result
+        detailed_steps = {
+            "steps": steps,
+            "message": f"Successfully minimized from {n} states to {len(current_partition)} states",
+            "equivalence_classes": [
+                {
+                    "new_state": state_names[i] if i < len(state_names) else f"S{i}",
+                    "original_states": [state.name for state in equiv_class],
+                    "is_start": any(state.is_start for state in equiv_class),
+                    "is_final": any(state.is_final for state in equiv_class)
+                }
+                for i, equiv_class in enumerate(current_partition)
+            ],
+            "transition_table": self._create_transition_table(minimized_automaton),
+            "original_state_count": n,
+            "minimized_state_count": len(current_partition),
+            "reduction_percentage": round(((n - len(current_partition)) / n) * 100, 1)
+        }
+        
+        return minimized_automaton, detailed_steps
+
+    def _create_transition_table(self, automaton):
+        """Helper method to create a transition table for display."""
+        alphabet = automaton.get_alphabet_as_set()
+        states = list(automaton.states.all())
+        
+        table = []
+        for state in states:
+            row = {"state": state.name, "is_start": state.is_start, "is_final": state.is_final}
+            for symbol in sorted(alphabet):
+                trans = automaton.transitions.filter(from_state=state, symbol=symbol).first()
+                row[symbol] = trans.to_state.name if trans else "∅"
+            table.append(row)
+        
+        return {
+            "headers": ["State"] + sorted(alphabet),
+            "rows": table
+        }
 
     def add_epsilon_transition(self, from_state, to_state):
         """

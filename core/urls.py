@@ -33,6 +33,7 @@ urlpatterns = [
     path('api/automaton/<int:pk>/minimize/', views.minimize_dfa, name='minimize_dfa'),
     path('api/automaton/<int:pk>/is-dfa/', views.check_if_nfa_is_dfa, name='check_if_nfa_is_dfa'),
     path('api/automaton/<int:pk>/check-type/', views.check_fa_type, name='check_fa_type'),
+    path('api/automaton/<int:pk>/enable-epsilon/', views.enable_epsilon, name='enable_epsilon'),
     # Legacy endpoints
     path('api/nfa/<int:pk>/to-dfa/', views.convert_nfa_to_dfa, name='convert_nfa_to_dfa_legacy'),
     path('api/dfa/<int:pk>/minimize/', views.minimize_dfa, name='minimize_dfa_legacy'),
@@ -42,4 +43,8 @@ urlpatterns = [
     # New standalone pages
     path('fa-checker/', views.FATypeCheckerView.as_view(), name='fa_type_checker'),
     path('conversion-tools/', views.ConversionToolsView.as_view(), name='conversion_tools'),
+    
+    # Result pages
+    path('automaton/<int:pk>/minimization-result/', views.MinimizationResultView.as_view(), name='minimization_result'),
+    path('automaton/<int:pk>/conversion-result/', views.ConversionResultView.as_view(), name='conversion_result'),
 ]

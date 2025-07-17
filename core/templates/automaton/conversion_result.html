@@ -1,0 +1,380 @@
+{% extends 'automaton/base.html' %}
+{% load core_extras %}
+
+{% block title %}NFA to DFA Conversion Result - {{ automaton.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1>
+                    <i class="fas fa-exchange-alt"></i> NFA to DFA Conversion Result
+                    <small class="text-muted">{{ automaton.name }}</small>
+                </h1>
+                <div>
+                    <a href="{% url 'core:automaton_detail' automaton.pk %}" class="btn btn-primary">
+                        <i class="fas fa-eye"></i> View Converted DFA
+                    </a>
+                    <a href="{% url 'core:dashboard' %}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Back to Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if has_steps %}
+    <!-- Summary Card -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card border-info">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-bar"></i> Conversion Summary
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row">
+                        <dt class="col-sm-7">NFA States:</dt>
+                        <dd class="col-sm-5">{{ detailed_steps.nfa_state_count }}</dd>
+                        
+                        <dt class="col-sm-7">DFA States:</dt>
+                        <dd class="col-sm-5">{{ detailed_steps.dfa_state_count }}</dd>
+                        
+                        <dt class="col-sm-7">Epsilon Transitions:</dt>
+                        <dd class="col-sm-5">
+                            {% if detailed_steps.has_epsilon_transitions %}
+                                <span class="badge bg-warning">Yes</span>
+                            {% else %}
+                                <span class="badge bg-secondary">No</span>
+                            {% endif %}
+                        </dd>
+                        
+                        <dt class="col-sm-7">Status:</dt>
+                        <dd class="col-sm-5">
+                            <span class="badge bg-success">Complete</span>
+                        </dd>
+                    </dl>
+                    <p class="text-muted small">{{ detailed_steps.message }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-sitemap"></i> State Mapping
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for mapping in detailed_steps.state_mapping %}
+                        <div class="col-md-6 mb-3">
+                            <div class="card border-info">
+                                <div class="card-header bg-info text-white">
+                                    <h6 class="mb-0">
+                                        DFA State {{ mapping.dfa_state }}
+                                        {% if mapping.is_start %}<span class="badge bg-success">START</span>{% endif %}
+                                        {% if mapping.is_final %}<span class="badge bg-warning">FINAL</span>{% endif %}
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <p class="mb-0">
+                                        <strong>NFA States:</strong>
+                                        {% for state in mapping.nfa_states %}
+                                            <code>{{ state }}</code>{% if not forloop.last %}, {% endif %}
+                                        {% endfor %}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step-by-Step Process -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-list-ol"></i> Subset Construction Algorithm Steps
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="accordion" id="stepsAccordion">
+                        {% for step in detailed_steps.steps %}
+                        <div class="card">
+                            <div class="card-header" id="step{{ step.step }}">
+                                <h6 class="mb-0">
+                                    <button class="btn btn-link text-start" type="button" data-bs-toggle="collapse" data-bs-target="#collapseStep{{ step.step }}" aria-expanded="{% if forloop.first %}true{% else %}false{% endif %}" aria-controls="collapseStep{{ step.step }}">
+                                        <i class="fas fa-chevron-down"></i> Step {{ step.step }}: {{ step.description }}
+                                    </button>
+                                </h6>
+                            </div>
+                            <div id="collapseStep{{ step.step }}" class="collapse {% if forloop.first %}show{% endif %}" aria-labelledby="step{{ step.step }}" data-bs-parent="#stepsAccordion">
+                                <div class="card-body">
+                                    <p class="text-muted">{{ step.explanation }}</p>
+                                    
+                                    {% if step.step == 1 %}
+                                        <!-- NFA Transition Table -->
+                                        <h6>Original NFA Transition Table:</h6>
+                                        <div class="table-responsive">
+                                            <table class="table table-bordered table-sm">
+                                                <thead class="thead-light">
+                                                    <tr>
+                                                        {% for header in step.nfa_table.headers %}
+                                                        <th>{{ header }}</th>
+                                                        {% endfor %}
+                                                        <th>Type</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% for row in step.nfa_table.rows %}
+                                                    <tr>
+                                                        <td><strong>{{ row.state }}</strong></td>
+                                                        {% for header in step.nfa_table.headers %}
+                                                            {% if header != "State" %}
+                                                            <td>{{ row|get_item:header }}</td>
+                                                            {% endif %}
+                                                        {% endfor %}
+                                                        <td>
+                                                            {% if row.is_start %}<span class="badge bg-success">START</span>{% endif %}
+                                                            {% if row.is_final %}<span class="badge bg-warning">FINAL</span>{% endif %}
+                                                            {% if not row.is_start and not row.is_final %}<span class="badge bg-secondary">NORMAL</span>{% endif %}
+                                                        </td>
+                                                    </tr>
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        <p><strong>Alphabet:</strong> {{ step.alphabet|join:", " }}</p>
+                                        
+                                    {% elif step.step == 2 %}
+                                        <!-- Start State Creation -->
+                                        <div class="alert alert-info">
+                                            <strong>NFA Start States:</strong>
+                                            {% for state in step.start_states %}
+                                                <code>{{ state }}</code>{% if not forloop.last %}, {% endif %}
+                                            {% endfor %}
+                                        </div>
+                                        <div class="alert alert-success">
+                                            <strong>DFA Start State (ε-closure):</strong>
+                                            {% for state in step.epsilon_closure %}
+                                                <code>{{ state }}</code>{% if not forloop.last %}, {% endif %}
+                                            {% endfor %}
+                                        </div>
+                                        
+                                    {% elif step.step == 3 %}
+                                        <!-- State Construction -->
+                                        <div class="table-responsive">
+                                            <table class="table table-bordered table-sm">
+                                                <thead class="thead-light">
+                                                    <tr>
+                                                        <th>DFA State</th>
+                                                        <th>NFA States</th>
+                                                        <th>Type</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% for construction in step.state_construction %}
+                                                    <tr>
+                                                        <td><strong>{{ construction.dfa_state }}</strong></td>
+                                                        <td>
+                                                            {% for state in construction.nfa_states %}
+                                                                <code>{{ state }}</code>{% if not forloop.last %}, {% endif %}
+                                                            {% endfor %}
+                                                        </td>
+                                                        <td>
+                                                            {% if construction.is_start %}<span class="badge bg-success">START</span>{% endif %}
+                                                            {% if construction.is_final %}<span class="badge bg-warning">FINAL</span>{% endif %}
+                                                            {% if not construction.is_start and not construction.is_final %}<span class="badge bg-secondary">NORMAL</span>{% endif %}
+                                                        </td>
+                                                    </tr>
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        
+                                    {% elif step.step == 4 %}
+                                        <!-- Transition Construction -->
+                                        <div class="table-responsive">
+                                            <table class="table table-bordered table-sm">
+                                                <thead class="thead-light">
+                                                    <tr>
+                                                        <th>From</th>
+                                                        <th>Symbol</th>
+                                                        <th>To</th>
+                                                        <th>Computation</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% for trans in step.transitions %}
+                                                    <tr>
+                                                        <td><strong>{{ trans.from_state }}</strong></td>
+                                                        <td><code>{{ trans.symbol }}</code></td>
+                                                        <td><strong>{{ trans.to_state }}</strong></td>
+                                                        <td class="small">{{ trans.nfa_computation }}</td>
+                                                    </tr>
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Comparison Tables -->
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-table"></i> Original NFA
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped table-sm">
+                            <thead class="thead-dark">
+                                <tr>
+                                    {% for header in detailed_steps.original_nfa_table.headers %}
+                                    <th>{{ header }}</th>
+                                    {% endfor %}
+                                    <th>Type</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in detailed_steps.original_nfa_table.rows %}
+                                <tr>
+                                    <td><strong>{{ row.state }}</strong></td>
+                                    {% for header in detailed_steps.original_nfa_table.headers %}
+                                        {% if header != "State" %}
+                                        <td>{{ row|get_item:header }}</td>
+                                        {% endif %}
+                                    {% endfor %}
+                                    <td>
+                                        {% if row.is_start %}<span class="badge bg-success">START</span>{% endif %}
+                                        {% if row.is_final %}<span class="badge bg-warning">FINAL</span>{% endif %}
+                                        {% if not row.is_start and not row.is_final %}<span class="badge bg-secondary">NORMAL</span>{% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-table"></i> Converted DFA
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped table-sm">
+                            <thead class="thead-dark">
+                                <tr>
+                                    {% for header in detailed_steps.final_dfa_table.headers %}
+                                    <th>{{ header }}</th>
+                                    {% endfor %}
+                                    <th>Type</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in detailed_steps.final_dfa_table.rows %}
+                                <tr>
+                                    <td><strong>{{ row.state }}</strong></td>
+                                    {% for header in detailed_steps.final_dfa_table.headers %}
+                                        {% if header != "State" %}
+                                        <td>{{ row|get_item:header }}</td>
+                                        {% endif %}
+                                    {% endfor %}
+                                    <td>
+                                        {% if row.is_start %}<span class="badge bg-success">START</span>{% endif %}
+                                        {% if row.is_final %}<span class="badge bg-warning">FINAL</span>{% endif %}
+                                        {% if not row.is_start and not row.is_final %}<span class="badge bg-secondary">NORMAL</span>{% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% else %}
+    <div class="row">
+        <div class="col-12">
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle"></i>
+                <strong>No detailed steps available.</strong> 
+                The conversion process data might have expired or been cleared.
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.card-header .btn-link {
+    text-decoration: none;
+    color: inherit;
+}
+
+.card-header .btn-link:hover {
+    text-decoration: none;
+}
+
+.fas.fa-chevron-down {
+    transition: transform 0.2s;
+}
+
+.collapsed .fas.fa-chevron-down {
+    transform: rotate(-90deg);
+}
+
+.table th, .table td {
+    vertical-align: middle;
+}
+
+code {
+    background-color: #f8f9fa;
+    padding: 2px 4px;
+    border-radius: 3px;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Initialize Bootstrap collapse functionality
+document.addEventListener('DOMContentLoaded', function() {
+    // Enable all Bootstrap collapse components
+    var collapseElementList = [].slice.call(document.querySelectorAll('.collapse'))
+    var collapseList = collapseElementList.map(function (collapseEl) {
+        return new bootstrap.Collapse(collapseEl, {
+            toggle: false
+        })
+    });
+});
+</script>
+{% endblock %}

@@ -151,14 +151,27 @@ class AutomatonCreateView(LoginRequiredMixin, CreateView):
         automaton.owner = self.request.user
         automaton.is_example = False
         automaton.has_epsilon = self.request.POST.get('has_epsilon') == 'on'
+        
+        # Add initial start state to make it valid from the beginning
         automaton.save()
         
+        # Create initial start state
+        initial_state = automaton.states.create(
+            name='q0',
+            is_start=True,
+            is_final=False
+        )
+        
+        # Update JSON representation
+        automaton.update_json_representation()
+        
         # Log creation action
+        automaton_type = 'NFA' if automaton.has_epsilon else 'DFA'
         UserHistory.log_action(
             user=self.request.user,
             automaton=automaton,
             action='create',
-            details={'automaton_type': 'Automaton', 'has_epsilon': automaton.has_epsilon}
+            details={'automaton_type': automaton_type, 'has_epsilon': automaton.has_epsilon}
         )
         
         return redirect('core:automaton_detail', pk=automaton.pk)
@@ -180,7 +193,37 @@ class AutomatonUpdateView(LoginRequiredMixin, UpdateView):
             class Meta:
                 model = Automaton
                 fields = ['name', 'alphabet']
+                widgets = {
+                    'name': forms.TextInput(attrs={
+                        'class': 'form-control',
+                        'placeholder': 'e.g., Even Number of A\'s'
+                    }),
+                    'alphabet': forms.TextInput(attrs={
+                        'class': 'form-control',
+                        'placeholder': 'e.g., a,b'
+                    }),
+                }
         return AutomatonForm
+
+    def form_valid(self, form):
+        # Handle epsilon field
+        automaton = form.save(commit=False)
+        automaton.has_epsilon = self.request.POST.get('has_epsilon') == 'on'
+        automaton.cached_type = ''  # Clear cached type when properties change
+        automaton.save()
+        
+        # Update JSON representation
+        automaton.update_json_representation()
+        
+        # Log edit action
+        UserHistory.log_action(
+            user=self.request.user,
+            automaton=automaton,
+            action='edit',
+            details={'action_type': 'update_properties', 'has_epsilon': automaton.has_epsilon}
+        )
+        
+        return redirect('core:automaton_detail', pk=automaton.pk)
 
     def get_success_url(self):
         return reverse_lazy('core:automaton_detail', kwargs={'pk': self.object.pk})
@@ -451,7 +494,10 @@ def convert_nfa_to_dfa(request, pk):
         if automaton.get_type() != 'NFA':
             return JsonResponse({'status': 'error', 'message': 'Only NFA can be converted to DFA.'}, status=400)
         
-        dfa = automaton.to_dfa()
+        dfa, detailed_steps = automaton.to_dfa()
+        
+        # Store the detailed steps in the session for the result page
+        request.session[f'conversion_steps_{dfa.id}'] = detailed_steps
         
         # Log conversion action
         UserHistory.log_action(
@@ -462,7 +508,9 @@ def convert_nfa_to_dfa(request, pk):
                 'from_type': 'NFA',
                 'to_type': 'DFA',
                 'result_dfa_id': dfa.id,
-                'result_dfa_name': dfa.name
+                'result_dfa_name': dfa.name,
+                'original_states': detailed_steps['nfa_state_count'],
+                'result_states': detailed_steps['dfa_state_count']
             }
         )
         
@@ -470,7 +518,8 @@ def convert_nfa_to_dfa(request, pk):
             'status': 'success', 
             'message': 'NFA successfully converted to DFA.',
             'dfa_id': dfa.id,
-            'dfa_name': dfa.name
+            'dfa_name': dfa.name,
+            'conversion_steps_url': f'/automata/automaton/{dfa.id}/conversion-result/'
         })
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
@@ -483,7 +532,10 @@ def minimize_dfa(request, pk):
         if automaton.get_type() != 'DFA':
             return JsonResponse({'status': 'error', 'message': 'Only DFA can be minimized.'}, status=400)
         
-        minimized_dfa = automaton.minimize()
+        minimized_dfa, detailed_steps = automaton.minimize()
+        
+        # Store the detailed steps in the session for the result page
+        request.session[f'minimization_steps_{minimized_dfa.id}'] = detailed_steps
         
         # Log minimization action
         UserHistory.log_action(
@@ -491,24 +543,27 @@ def minimize_dfa(request, pk):
             automaton=automaton,
             action='minimize',
             details={
-                'original_states': automaton.states.count(),
-                'minimized_states': minimized_dfa.states.count(),
+                'original_states': detailed_steps['original_state_count'],
+                'minimized_states': detailed_steps['minimized_state_count'],
                 'was_already_minimal': minimized_dfa == automaton,
-                'result_dfa_id': minimized_dfa.id if minimized_dfa != automaton else automaton.id
+                'result_dfa_id': minimized_dfa.id if minimized_dfa != automaton else automaton.id,
+                'reduction_percentage': detailed_steps.get('reduction_percentage', 0)
             }
         )
         
         if minimized_dfa == automaton:
             return JsonResponse({
                 'status': 'info',
-                'message': 'DFA is already minimal.'
+                'message': 'DFA is already minimal.',
+                'minimization_steps_url': f'/automata/automaton/{automaton.id}/minimization-result/'
             })
         else:
             return JsonResponse({
                 'status': 'success',
                 'message': 'DFA successfully minimized.',
                 'minimized_dfa_id': minimized_dfa.id,
-                'minimized_dfa_name': minimized_dfa.name
+                'minimized_dfa_name': minimized_dfa.name,
+                'minimization_steps_url': f'/automata/automaton/{minimized_dfa.id}/minimization-result/'
             })
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
@@ -533,6 +588,41 @@ def check_fa_type(request, pk):
         'message': dfa_message if is_dfa_valid else nfa_message,
         'current_type': fa_type
     })
+
+@login_required
+@require_POST
+def enable_epsilon(request, pk):
+    """Enable epsilon transitions for an automaton, converting DFA to NFA."""
+    try:
+        automaton = get_automaton_instance(pk, request.user)
+        
+        if automaton.has_epsilon:
+            return JsonResponse({'status': 'error', 'message': 'Epsilon transitions already enabled.'}, status=400)
+        
+        # Enable epsilon transitions
+        automaton.has_epsilon = True
+        automaton.cached_type = ''  # Clear cached type to force re-evaluation
+        automaton.save()
+        
+        # Log the action
+        UserHistory.log_action(
+            user=request.user,
+            automaton=automaton,
+            action='edit',
+            details={
+                'action_type': 'enable_epsilon',
+                'converted_from': 'DFA',
+                'converted_to': 'NFA'
+            }
+        )
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Epsilon transitions enabled. Automaton is now an NFA.',
+            'new_type': 'NFA'
+        })
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 class FATypeCheckerView(LoginRequiredMixin, ListView):
     template_name = 'automaton/fa_type_checker.html'
@@ -576,4 +666,48 @@ class ConversionToolsView(LoginRequiredMixin, ListView):
         automatons = self.get_queryset()
         context['dfas'] = automatons['dfas']
         context['nfas'] = automatons['nfas']
+        return context
+
+
+class MinimizationResultView(LoginRequiredMixin, DetailView):
+    """View for displaying detailed minimization results."""
+    template_name = 'automaton/minimization_result.html'
+    context_object_name = 'automaton'
+    
+    def get_object(self, queryset=None):
+        return get_automaton_instance(self.kwargs.get('pk'), self.request.user)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        automaton = self.get_object()
+        
+        # Get detailed steps from session
+        steps_key = f'minimization_steps_{automaton.id}'
+        detailed_steps = self.request.session.get(steps_key, {})
+        
+        context['detailed_steps'] = detailed_steps
+        context['has_steps'] = bool(detailed_steps)
+        
+        return context
+
+
+class ConversionResultView(LoginRequiredMixin, DetailView):
+    """View for displaying detailed NFA to DFA conversion results."""
+    template_name = 'automaton/conversion_result.html'
+    context_object_name = 'automaton'
+    
+    def get_object(self, queryset=None):
+        return get_automaton_instance(self.kwargs.get('pk'), self.request.user)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        automaton = self.get_object()
+        
+        # Get detailed steps from session
+        steps_key = f'conversion_steps_{automaton.id}'
+        detailed_steps = self.request.session.get(steps_key, {})
+        
+        context['detailed_steps'] = detailed_steps
+        context['has_steps'] = bool(detailed_steps)
+        
         return context

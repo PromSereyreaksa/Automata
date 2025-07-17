@@ -228,7 +228,7 @@
             </div>
 
             <!-- Transition Management Panel -->
-            <div class="card">
+            <div class="card mb-4">
                 <div class="card-header">
                     <h6 class="card-title mb-0">
                         <i class="fas fa-arrow-right me-2"></i>Transitions
@@ -266,6 +266,24 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Epsilon Toggle Panel -->
+            {% if fa_type == 'DFA' and not automaton.has_epsilon %}
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-exchange-alt me-2"></i>Convert to NFA
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted mb-3">Enable epsilon (ε) transitions to convert this DFA to an NFA.</p>
+                    <button id="enable-epsilon-btn" class="btn btn-success w-100">
+                        <i class="fas fa-exchange-alt me-2"></i>Enable Epsilon Transitions
+                    </button>
+                    <div id="epsilon-result" class="mt-3 d-none"></div>
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
@@ -287,6 +305,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const convertNfaToDfaUrl = `{% url 'core:convert_nfa_to_dfa' automaton.pk %}`;
     const minimizeDfaUrl = `{% url 'core:minimize_dfa' automaton.pk %}`;
     const checkFaTypeUrl = `{% url 'core:check_fa_type' automaton.pk %}`;
+    const enableEpsilonUrl = `{% url 'core:enable_epsilon' automaton.pk %}`;
 
     // DOM Elements
     const globalErrorDiv = document.getElementById('global-error');
@@ -781,10 +800,18 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
                         <div class="alert alert-success">
                             <strong>Result:</strong> DFA "${result.dfa_name}" created successfully!
+                            <br>
+                            <div class="mt-3">
+                                <a href="/automata/automaton/${result.dfa_id}/" class="btn btn-primary btn-sm me-2">
+                                    <i class="fas fa-eye me-1"></i>View DFA
+                                </a>
+                                <a href="${result.conversion_steps_url}" class="btn btn-info btn-sm">
+                                    <i class="fas fa-list-ol me-1"></i>View Conversion Details
+                                </a>
+                            </div>
                         </div>
                     `;
                     resultDiv.classList.remove('d-none');
-                    document.getElementById('view-dfa-link').href = `/automaton/${result.dfa_id}/`;
                 } else {
                     stepsDiv.innerHTML = `<div class="alert alert-danger">${result.message}</div>`;
                 }
@@ -826,10 +853,18 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
                         <div class="alert alert-success">
                             <strong>Result:</strong> Minimized DFA "${result.minimized_dfa_name}" created successfully!
+                            <br>
+                            <div class="mt-3">
+                                <a href="/automata/automaton/${result.minimized_dfa_id}/" class="btn btn-primary btn-sm me-2">
+                                    <i class="fas fa-eye me-1"></i>View Minimized DFA
+                                </a>
+                                <a href="${result.minimization_steps_url}" class="btn btn-info btn-sm">
+                                    <i class="fas fa-list-ol me-1"></i>View Minimization Details
+                                </a>
+                            </div>
                         </div>
                     `;
                     resultDiv.classList.remove('d-none');
-                    document.getElementById('view-minimized-link').href = `/automaton/${result.minimized_dfa_id}/`;
                 } else if (result.status === 'info') {
                     stepsDiv.innerHTML = `
                         <div class="alert alert-info">
@@ -843,6 +878,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
                         <div class="alert alert-info">
                             <strong>Result:</strong> ${result.message}
+                            <br>
+                            <div class="mt-3">
+                                <a href="${result.minimization_steps_url}" class="btn btn-info btn-sm">
+                                    <i class="fas fa-list-ol me-1"></i>View Minimization Details
+                                </a>
+                            </div>
                         </div>
                     `;
                 } else {
@@ -856,6 +897,45 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // --- Enable Epsilon Transitions ---
+    const enableEpsilonBtn = document.getElementById('enable-epsilon-btn');
+    if (enableEpsilonBtn) {
+        enableEpsilonBtn.addEventListener('click', async () => {
+            const resultDiv = document.getElementById('epsilon-result');
+            
+            resultDiv.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Enabling epsilon transitions...';
+            resultDiv.classList.remove('d-none');
+            enableEpsilonBtn.disabled = true;
+            
+            try {
+                const response = await fetch(enableEpsilonUrl, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': csrftoken }
+                });
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle me-2"></i>
+                            <strong>Success!</strong> Epsilon transitions have been enabled.
+                            <br><small>${result.message}</small>
+                        </div>
+                    `;
+                    // Refresh the page to update the UI
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                } else {
+                    resultDiv.innerHTML = `<div class="alert alert-danger">${result.message}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="alert alert-danger">Failed to enable epsilon transitions: ${error.message}</div>`;
+            } finally {
+                enableEpsilonBtn.disabled = false;
+            }
+        });
+    }
 
     // --- Initial Load ---
     refreshAutomatonData();
