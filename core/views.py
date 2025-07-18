@@ -462,13 +462,20 @@ def simulate_string(request, pk):
     automaton = get_automaton_instance(pk, request.user)
     input_string = request.GET.get('input_string', '')
     
-    # The simulate method needs to be updated to return a path
-    accepted, message, *path_data = automaton.simulate(input_string)
-    path = path_data[0] if path_data else []
+    # The simulate method now returns detailed path information
+    simulation_result = automaton.simulate(input_string)
+    accepted, message = simulation_result[:2]
+    path = simulation_result[2] if len(simulation_result) > 2 else []
+    detailed_path = simulation_result[3] if len(simulation_result) > 3 else {}
     
     # Removed simulation logging for better UX - only log create/edit actions
 
-    return JsonResponse({'accepted': accepted, 'message': message, 'path': path})
+    return JsonResponse({
+        'accepted': accepted, 
+        'message': message, 
+        'path': path,
+        'detailed_path': detailed_path
+    })
 
 @login_required
 def get_alphabet_symbols(request, pk):

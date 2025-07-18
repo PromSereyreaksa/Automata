@@ -349,7 +349,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     'text-border-width': 1,
                     'text-border-color': '#e2e8f0',
                     'source-distance-from-node': 5,
-                    'target-distance-from-node': 5
+                    'target-distance-from-node': 5,
+                    'control-point-distance': 40,
+                    'control-point-weight': 0.5
                 }
             },
             {
@@ -467,14 +469,57 @@ document.addEventListener('DOMContentLoaded', function() {
         return response.json();
     }
 
+    // --- Function to improve multiple transitions visualization ---
+    function improveMultipleTransitionsVisualization(data) {
+        // Group transitions by source-target pairs
+        const transitionGroups = {};
+        
+        data.edges.forEach(edge => {
+            const key = `${edge.data.source}-${edge.data.target}`;
+            if (!transitionGroups[key]) {
+                transitionGroups[key] = [];
+            }
+            transitionGroups[key].push(edge);
+        });
+        
+        // Apply different control point distances for multiple transitions
+        Object.keys(transitionGroups).forEach(key => {
+            const transitions = transitionGroups[key];
+            if (transitions.length > 1) {
+                transitions.forEach((transition, index) => {
+                    const offset = (index - (transitions.length - 1) / 2) * 30;
+                    transition.data.controlPointDistance = 40 + Math.abs(offset);
+                    transition.data.controlPointWeight = 0.5 + (offset / 200);
+                });
+            }
+        });
+        
+        return data;
+    }
+
     // --- Core Data Refresh Function ---
     async function refreshAutomatonData() {
         try {
             const response = await fetch(getJsonUrl);
-            const data = await response.json();
+            let data = await response.json();
+            
+            // Improve visualization of multiple transitions
+            data = improveMultipleTransitionsVisualization(data);
             
             cy.elements().remove();
             cy.add(data);
+            
+            // Apply custom styling for multiple transitions
+            cy.edges().forEach(edge => {
+                const edgeData = edge.data();
+                if (edgeData.controlPointDistance) {
+                    edge.style({
+                        'control-point-distance': edgeData.controlPointDistance,
+                        'control-point-weight': edgeData.controlPointWeight
+                    });
+                }
+            });
+            
             cy.layout({ name: 'circle', radius: 150, padding: 50, animate: true }).run();
 
             updateControlLists(data);
@@ -677,33 +722,53 @@ document.addEventListener('DOMContentLoaded', function() {
             cy.elements().removeClass('highlighted path-edge current-state visited-state');
             
             if (result.path && result.path.length > 0) {
-                // Animate path with enhanced visualization
+                // Animate path with enhanced visualization using detailed path information
                 let i = 0;
                 const highlightNext = () => {
                     if (i < result.path.length) {
                         // Remove previous current state
                         cy.elements('.current-state').removeClass('current-state');
                         
-                        // Add current state
-                        cy.getElementById(result.path[i]).addClass('current-state');
+                        // Handle multiple states for NFAs or single state for DFAs
+                        const currentStates = Array.isArray(result.path[i]) ? result.path[i] : [result.path[i]];
+                        
+                        // Add current state(s)
+                        currentStates.forEach(stateName => {
+                            cy.getElementById(stateName).addClass('current-state');
+                        });
                         
                         // Mark all previous states as visited
                         for (let j = 0; j < i; j++) {
-                            cy.getElementById(result.path[j]).addClass('visited-state');
+                            const prevStates = Array.isArray(result.path[j]) ? result.path[j] : [result.path[j]];
+                            prevStates.forEach(stateName => {
+                                cy.getElementById(stateName).addClass('visited-state');
+                            });
                         }
                         
-                        if (i > 0) {
-                            // Highlight the edge between previous and current state
-                            const prevState = result.path[i-1];
-                            const currState = result.path[i];
-                            const edge = cy.edges(`[source="${prevState}"][target="${currState}"]`);
-                            edge.addClass('path-edge');
+                        // Highlight specific transitions using detailed path information
+                        if (i > 0 && result.detailed_path && result.detailed_path.transitions) {
+                            const transitionIndex = i - 1;
+                            const transitions = result.detailed_path.transitions[transitionIndex];
                             
-                            // Add loop indicator if same state
-                            if (prevState === currState) {
-                                edge.addClass('loop-edge');
+                            if (transitions && transitions.length > 0) {
+                                transitions.forEach(transition => {
+                                    // Find the specific transition by ID
+                                    const edge = cy.edges().filter(edge => {
+                                        return edge.data('pk') === transition.transition_id;
+                                    });
+                                    
+                                    if (edge.length > 0) {
+                                        edge.addClass('path-edge');
+                                        
+                                        // Add loop indicator if same state
+                                        if (transition.from_state === transition.to_state) {
+                                            edge.addClass('loop-edge');
+                                        }
+                                    }
+                                });
                             }
                         }
+                        
                         i++;
                         setTimeout(highlightNext, 1000);
                     } else {

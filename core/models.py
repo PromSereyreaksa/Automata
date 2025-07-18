@@ -190,6 +190,13 @@ class Automaton(models.Model):
 
         current_state = self.states.get(is_start=True)
         path = [current_state.name]
+        
+        # Create detailed path tracking for DFA
+        detailed_path = {
+            'states': [current_state.name],
+            'transitions': [],
+            'symbols': []
+        }
 
         for symbol in input_string:
             if symbol not in self.get_alphabet_as_set():
@@ -208,10 +215,21 @@ class Automaton(models.Model):
                 
                 current_state = matching_transition.to_state
                 path.append(current_state.name)
+                
+                # Add transition details
+                detailed_path['states'].append(current_state.name)
+                detailed_path['transitions'].append([{
+                    'from_state': matching_transition.from_state.name,
+                    'to_state': matching_transition.to_state.name,
+                    'symbol': symbol,
+                    'transition_id': matching_transition.pk
+                }])
+                detailed_path['symbols'].append(symbol)
+                
             except Exception as e:
                 return False, f"Error during simulation: {str(e)}", path
 
-        return current_state.is_final, "Simulation completed.", path
+        return current_state.is_final, "Simulation completed.", path, detailed_path
 
     def _simulate_nfa(self, input_string):
         """Simulates NFA on input string."""
@@ -240,19 +258,32 @@ class Automaton(models.Model):
         initial_states = set(start_states)
         current_states = epsilon_closure(initial_states)
         
-        # Create path tracking with sets of states
+        # Create detailed path tracking with state sets and transitions
         path = [sorted([state.name for state in current_states])]
+        detailed_path = {
+            'states': [sorted([state.name for state in current_states])],
+            'transitions': [],
+            'symbols': []
+        }
 
         for symbol in input_string:
             if symbol not in self.get_alphabet_as_set():
                 return False, f"Input symbol '{symbol}' is not in the alphabet.", path
 
             next_states = set()
+            transitions_taken = []
+            
             for state in current_states:
                 transitions = self.transitions.filter(from_state=state)
                 for trans in transitions:
                     if trans.matches_symbol(symbol):
                         next_states.add(trans.to_state)
+                        transitions_taken.append({
+                            'from_state': state.name,
+                            'to_state': trans.to_state.name,
+                            'symbol': symbol,
+                            'transition_id': trans.pk
+                        })
             
             if not next_states:
                 return False, "Simulation stuck. No transition found.", path
@@ -260,13 +291,16 @@ class Automaton(models.Model):
             current_states = epsilon_closure(next_states)
             if current_states:
                 path.append(sorted([state.name for state in current_states]))
+                detailed_path['states'].append(sorted([state.name for state in current_states]))
+                detailed_path['transitions'].append(transitions_taken)
+                detailed_path['symbols'].append(symbol)
 
         # Check if any of the final states is in the set of current states
         for state in current_states:
             if state.is_final:
-                return True, "String accepted.", path
+                return True, "String accepted.", path, detailed_path
         
-        return False, "String rejected.", path
+        return False, "String rejected.", path, detailed_path
 
     def to_dfa(self):
         """

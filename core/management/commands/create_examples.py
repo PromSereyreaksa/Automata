@@ -18,6 +18,12 @@ class Command(BaseCommand):
         # Create NFA examples
         self.create_nfa_examples(system_user)
         
+        # Create Rohini College PDF examples
+        self.create_rohini_examples(system_user)
+        
+        # Create DFA minimization examples
+        self.create_minimization_examples(system_user)
+        
         self.stdout.write(self.style.SUCCESS('Successfully created example automata'))
 
     def create_dfa_examples(self, system_user):
@@ -213,3 +219,144 @@ class Command(BaseCommand):
         Transition.objects.create(automaton=nfa5, from_state=n2, to_state=n3, symbol="y")
         
         nfa5.update_json_representation()
+
+    def create_rohini_examples(self, system_user):
+        """Create Rohini College PDF NFA examples"""
+        
+        # Rohini Example 1: NFA with 3 states
+        rohini1 = Automaton.objects.create(
+            name="Rohini Example 1 - NFA to DFA",
+            alphabet="0,1",
+            owner=system_user,
+            is_example=True,
+            has_epsilon=False
+        )
+        
+        # States
+        q0 = State.objects.create(automaton=rohini1, name="q0", is_start=True)
+        q1 = State.objects.create(automaton=rohini1, name="q1")
+        q2 = State.objects.create(automaton=rohini1, name="q2", is_final=True)
+        
+        # Transitions
+        Transition.objects.create(automaton=rohini1, from_state=q0, to_state=q0, symbol="0")
+        Transition.objects.create(automaton=rohini1, from_state=q0, to_state=q1, symbol="1")
+        Transition.objects.create(automaton=rohini1, from_state=q1, to_state=q1, symbol="0")
+        Transition.objects.create(automaton=rohini1, from_state=q1, to_state=q2, symbol="0")
+        Transition.objects.create(automaton=rohini1, from_state=q1, to_state=q1, symbol="1")
+        Transition.objects.create(automaton=rohini1, from_state=q2, to_state=q2, symbol="0")
+        Transition.objects.create(automaton=rohini1, from_state=q2, to_state=q1, symbol="1")
+        Transition.objects.create(automaton=rohini1, from_state=q2, to_state=q2, symbol="1")
+        
+        rohini1.update_json_representation()
+        
+        # Rohini Example 2: NFA with 2 states
+        rohini2 = Automaton.objects.create(
+            name="Rohini Example 2 - NFA to DFA",
+            alphabet="0,1",
+            owner=system_user,
+            is_example=True,
+            has_epsilon=False
+        )
+        
+        # States
+        r0 = State.objects.create(automaton=rohini2, name="q0", is_start=True)
+        r1 = State.objects.create(automaton=rohini2, name="q1", is_final=True)
+        
+        # Transitions
+        Transition.objects.create(automaton=rohini2, from_state=r0, to_state=r0, symbol="0")
+        Transition.objects.create(automaton=rohini2, from_state=r0, to_state=r1, symbol="0")
+        Transition.objects.create(automaton=rohini2, from_state=r0, to_state=r1, symbol="1")
+        Transition.objects.create(automaton=rohini2, from_state=r1, to_state=r0, symbol="1")
+        Transition.objects.create(automaton=rohini2, from_state=r1, to_state=r1, symbol="1")
+        
+        rohini2.update_json_representation()
+
+    def create_minimization_examples(self, system_user):
+        """Create DFA examples suitable for Myhill-Nerode minimization"""
+        
+        # 6-State DFA for Minimization
+        min_dfa1 = Automaton.objects.create(
+            name="6-State DFA for Minimization",
+            alphabet="0,1",
+            owner=system_user,
+            is_example=True,
+            has_epsilon=False
+        )
+        
+        # Create states
+        a = State.objects.create(automaton=min_dfa1, name="a", is_start=True)
+        b = State.objects.create(automaton=min_dfa1, name="b")
+        c = State.objects.create(automaton=min_dfa1, name="c")
+        d = State.objects.create(automaton=min_dfa1, name="d")
+        e = State.objects.create(automaton=min_dfa1, name="e")
+        f = State.objects.create(automaton=min_dfa1, name="f", is_final=True)
+        
+        # Create transitions
+        Transition.objects.create(automaton=min_dfa1, from_state=a, to_state=c, symbol="0")
+        Transition.objects.create(automaton=min_dfa1, from_state=a, to_state=a, symbol="1")
+        Transition.objects.create(automaton=min_dfa1, from_state=b, to_state=d, symbol="0")
+        Transition.objects.create(automaton=min_dfa1, from_state=b, to_state=b, symbol="1")
+        Transition.objects.create(automaton=min_dfa1, from_state=c, to_state=c, symbol="0")
+        Transition.objects.create(automaton=min_dfa1, from_state=c, to_state=f, symbol="1")
+        Transition.objects.create(automaton=min_dfa1, from_state=d, to_state=d, symbol="0")
+        Transition.objects.create(automaton=min_dfa1, from_state=d, to_state=f, symbol="1")
+        Transition.objects.create(automaton=min_dfa1, from_state=e, to_state=e, symbol="0")
+        Transition.objects.create(automaton=min_dfa1, from_state=e, to_state=f, symbol="1")
+        Transition.objects.create(automaton=min_dfa1, from_state=f, to_state=c, symbol="0")
+        Transition.objects.create(automaton=min_dfa1, from_state=f, to_state=a, symbol="1")
+        
+        min_dfa1.update_json_representation()
+        
+        # 4-State DFA for Minimization
+        min_dfa2 = Automaton.objects.create(
+            name="4-State DFA for Minimization",
+            alphabet="0,1",
+            owner=system_user,
+            is_example=True,
+            has_epsilon=False
+        )
+        
+        # Create states
+        q0 = State.objects.create(automaton=min_dfa2, name="q0", is_start=True, is_final=True)
+        q1 = State.objects.create(automaton=min_dfa2, name="q1")
+        q2 = State.objects.create(automaton=min_dfa2, name="q2", is_final=True)
+        q3 = State.objects.create(automaton=min_dfa2, name="q3")
+        
+        # Create transitions
+        Transition.objects.create(automaton=min_dfa2, from_state=q0, to_state=q0, symbol="0")
+        Transition.objects.create(automaton=min_dfa2, from_state=q0, to_state=q1, symbol="1")
+        Transition.objects.create(automaton=min_dfa2, from_state=q1, to_state=q1, symbol="0")
+        Transition.objects.create(automaton=min_dfa2, from_state=q1, to_state=q2, symbol="1")
+        Transition.objects.create(automaton=min_dfa2, from_state=q2, to_state=q2, symbol="0")
+        Transition.objects.create(automaton=min_dfa2, from_state=q2, to_state=q3, symbol="1")
+        Transition.objects.create(automaton=min_dfa2, from_state=q3, to_state=q3, symbol="0")
+        Transition.objects.create(automaton=min_dfa2, from_state=q3, to_state=q0, symbol="1")
+        
+        min_dfa2.update_json_representation()
+        
+        # DFA with Unreachable States
+        min_dfa3 = Automaton.objects.create(
+            name="DFA with Unreachable States",
+            alphabet="0,1",
+            owner=system_user,
+            is_example=True,
+            has_epsilon=False
+        )
+        
+        # Create states
+        r0 = State.objects.create(automaton=min_dfa3, name="q0", is_start=True)
+        r1 = State.objects.create(automaton=min_dfa3, name="q1", is_final=True)
+        r2 = State.objects.create(automaton=min_dfa3, name="q2")  # unreachable
+        r3 = State.objects.create(automaton=min_dfa3, name="q3", is_final=True)  # unreachable
+        
+        # Create transitions
+        Transition.objects.create(automaton=min_dfa3, from_state=r0, to_state=r0, symbol="0")
+        Transition.objects.create(automaton=min_dfa3, from_state=r0, to_state=r1, symbol="1")
+        Transition.objects.create(automaton=min_dfa3, from_state=r1, to_state=r0, symbol="0")
+        Transition.objects.create(automaton=min_dfa3, from_state=r1, to_state=r1, symbol="1")
+        Transition.objects.create(automaton=min_dfa3, from_state=r2, to_state=r2, symbol="0")
+        Transition.objects.create(automaton=min_dfa3, from_state=r2, to_state=r3, symbol="1")
+        Transition.objects.create(automaton=min_dfa3, from_state=r3, to_state=r2, symbol="0")
+        Transition.objects.create(automaton=min_dfa3, from_state=r3, to_state=r3, symbol="1")
+        
+        min_dfa3.update_json_representation()
